@@ -16,6 +16,7 @@
     "db:demo": "tsx scripts/seed-demo.ts",
     "db:clear-applications": "tsx scripts/clear-applications.ts",
     "db:reset-accounts": "tsx scripts/reset-accounts.ts",
+    "db:bootstrap-admins": "tsx scripts/bootstrap-admins.ts",
     "mail:test": "tsx scripts/mail-test.ts",
     "db:studio": "prisma studio",
     "jobs:collect": "tsx scripts/collect-instalments.ts",
