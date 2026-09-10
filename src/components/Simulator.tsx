@@ -60,12 +60,20 @@ function useWheelStep(
   }, [ref, step]);
 }
 
-/** The option nearest a stored value, so an unlisted term cannot strand the slider. */
-function nearestTerm(options: readonly number[], value: number): number {
-  return options.reduce(
-    (best, option) => (Math.abs(option - value) < Math.abs(best - value) ? option : best),
-    options[0],
-  );
+/**
+ * Position of the option nearest a stored value.
+ *
+ * The slider's state is this index, never the months: deriving the months from
+ * the index is total, while looking an index back up from the months is not —
+ * a stored term that is not one of the offered ones yields -1, and a slider
+ * whose value is -1 sits at its minimum and refuses to move off it.
+ */
+function nearestTermIndex(options: readonly number[], value: number): number {
+  let best = 0;
+  for (let index = 1; index < options.length; index += 1) {
+    if (Math.abs(options[index] - value) < Math.abs(options[best] - value)) best = index;
+  }
+  return best;
 }
 
 /**
@@ -96,9 +104,10 @@ export function Simulator({
   footnote?: string;
 }) {
   const [amount, setAmount] = useState(limits.defaultAmount);
-  const [termMonths, setTermMonths] = useState(() =>
-    nearestTerm(limits.termOptions, limits.defaultTermMonths),
+  const [termIndex, setTermIndex] = useState(() =>
+    nearestTermIndex(limits.termOptions, limits.defaultTermMonths),
   );
+  const termMonths = limits.termOptions[termIndex] ?? limits.termOptions[0];
   const [purpose, setPurpose] = useState<LoanPurpose>(limits.defaultPurpose ?? "FREE_USE");
   const [showSchedule, setShowSchedule] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -117,7 +126,6 @@ export function Simulator({
 
   const amountRef = useRef<HTMLInputElement>(null);
   const termRef = useRef<HTMLInputElement>(null);
-  const termIndex = limits.termOptions.indexOf(termMonths);
 
   const stepAmount = useCallback(
     (direction: 1 | -1) => {
@@ -136,10 +144,10 @@ export function Simulator({
     (direction: 1 | -1) => {
       const next = termIndex + direction;
       if (next < 0 || next >= limits.termOptions.length) return false;
-      setTermMonths(limits.termOptions[next]);
+      setTermIndex(next);
       return true;
     },
-    [termIndex, limits.termOptions],
+    [termIndex, limits.termOptions.length],
   );
 
   useWheelStep(amountRef, stepAmount);
@@ -195,7 +203,7 @@ export function Simulator({
               max={limits.termOptions.length - 1}
               step={1}
               value={termIndex}
-              onChange={(event) => setTermMonths(limits.termOptions[Number(event.target.value)])}
+              onChange={(event) => setTermIndex(Number(event.target.value))}
             />
             <div className="flex justify-between text-xs text-[var(--muted)] tabular">
               <span>{limits.termOptions[0]}</span>
