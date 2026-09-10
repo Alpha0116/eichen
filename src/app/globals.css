@@ -1,0 +1,435 @@
+@import "tailwindcss";
+
+/*
+ * Eichen design tokens.
+ *
+ * The two brand colours are taken from the logo: orange #FF751F and navy
+ * #0D005D. White text on that orange reaches only about 2.5:1, so the primary
+ * button is orange with navy text (about 6.6:1) rather than the usual orange
+ * with white — the same pairing the logo itself uses.
+ */
+
+@theme {
+  --color-brand-orange: #ff751f;
+  --color-brand-orange-strong: #e85f0c;
+  --color-brand-orange-soft: #fff2e8;
+  --color-brand-navy: #0d005d;
+  --color-brand-navy-soft: #f1effa;
+
+  /* Design system: Sora carries the headings, Inter the running text. Both
+     are declared with a real fallback stack, so a blocked font file degrades
+     to a system face instead of to Times. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* The system monospace stack, not a third webfont: it is used only for a
+     JSON editor and for recovery codes, where the shape of the face matters
+     far less than not paying for another font fetch. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root {
+  /* Light only, by decision: the product must read as white regardless of
+     the visitor's OS/browser dark-mode setting. `color-scheme: light` also
+     stops the browser from darkening native form controls (date pickers,
+     scrollbars) on its own even where no token below applies. */
+  color-scheme: light;
+
+  --background: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f4f3f9;
+  --foreground: #0d005d;
+  --muted: #57527d;
+  --border: #e2e0ee;
+  --border-strong: #c9c5df;
+
+  --accent: #ff751f;
+  --accent-ink: #0d005d;
+  --accent-soft: #fff2e8;
+  /* Headline figures (the instalment, the APR) use the brand navy in light
+     mode and the brand orange in dark mode — in each theme, whichever of the
+     two carries more visual weight against the page background. */
+  --figure-emphasis: #0d005d;
+  /* A second accent, used only to tell a rate/percentage figure apart from a
+     money figure at a glance (the pattern real German comparators use: warm
+     colour for an amount, cool colour for a rate). Never used for anything
+     actionable — buttons and links stay on the brand orange. */
+  --rate-accent: #0f6e5f;
+
+  /* The accent pair is tuned for a filled button: dark ink on orange. A soft
+     notice panel needs its own pair, or the ink lands on the soft background
+     and disappears once the theme inverts. */
+  --notice-bg: #fff2e8;
+  --notice-fg: #7a3a00;
+
+  --positive: #0f6b45;
+  --positive-soft: #e6f4ee;
+  --warning: #8a5a00;
+  --warning-soft: #fdf3e0;
+  --danger: #a4162c;
+  --danger-soft: #fdecef;
+  --info: #1c3faa;
+  --info-soft: #eaeffb;
+
+  --focus: #ff751f;
+  --radius: 0.625rem;
+
+  /* Elevation. Flat bordered cards read as an admin panel; a marketing
+     surface needs actual depth to separate itself from the page. Shadows are
+     tuned soft and cool so they read as depth, not as a drop-shadow effect. */
+  /* Elevation, per ressources/design-system.md § 4, tinted to the brand navy
+     rather than neutral black so a raised card sits in the same colour family
+     as everything under it. */
+  --shadow-sm: 0 2px 8px rgb(13 0 93 / 0.06);
+  --shadow-md: 0 8px 24px rgb(13 0 93 / 0.10);
+  --shadow-lg: 0 16px 40px rgb(13 0 93 / 0.16);
+
+  /* --- Design system scales (ressources/design-system.md) ----------------
+     The palette stays Eichen's own — the document says in § 7 that its violet
+     and mint are a neutral starting point to be replaced by the brand's. What
+     is adopted verbatim is everything below the colour: the type scale, the
+     4px spacing unit, the radii, the elevation and the grid.
+
+     The two brand colours map onto the document's two roles: navy is
+     `color-primary` (brand, links, active states, step markers), orange is
+     `color-accent` (the conversion CTA). Buttons therefore stay orange with
+     navy ink, exactly as they render today. */
+  --primary: #0d005d;
+  --primary-dark: #08003a;
+  --primary-light: #f1effa;
+
+  /* Radii. `--radius` remains the small one so existing call sites keep
+     rendering fields at the size they were designed for. */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 999px;
+
+  /* Type scale. Line height 1.15 on headings, 1.5 on running text. */
+  --text-display: 3.5rem;
+  --text-h1: 2.5rem;
+  --text-h2: 1.75rem;
+  --text-h3: 1.25rem;
+  --text-body-lg: 1.125rem;
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+  --text-caption: 0.75rem;
+  --leading-heading: 1.15;
+  --leading-body: 1.5;
+
+  /* Spacing, 4px unit. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-24: 6rem;
+
+  /* Grid: 1200px container, 24px gutter. */
+  --container: 75rem;
+  --gutter: 1.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border-subtle: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-notice-bg: var(--notice-bg);
+  --color-notice-fg: var(--notice-fg);
+  --color-figure-emphasis: var(--figure-emphasis);
+  --color-rate-accent: var(--rate-accent);
+  --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings run on the display face at the tighter heading leading. Sizes stay
+   with the components, which need to vary them by context; what is global is
+   the face, the weight floor and the line height. */
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: var(--font-display);
+  line-height: var(--leading-heading);
+  letter-spacing: -0.01em;
+}
+
+/* One visible focus ring everywhere, including for keyboard users inside
+   custom controls where the browser default would be invisible on orange. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Tabular figures keep money columns aligned as values change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Native range input, restyled once so both sliders match. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1.75rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.375rem;
+  width: 1.375rem;
+  margin-top: -0.55rem;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgb(13 0 93 / 0.35);
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 1.375rem;
+  width: 1.375rem;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 4px rgb(13 0 93 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Zeroing the duration alone would leave an unrevealed element invisible
+     until its observer fires. Under this preference it is simply never
+     hidden in the first place. */
+  [data-js] [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* --- Design-system component behaviours ------------------------------------
+   Kept here rather than repeated per component, so the "no one-off values"
+   rule in ressources/design-system.md § 6 has somewhere to hold. */
+
+/* 1200px container with the 24px gutter from § 4. */
+.ds-container {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* --- Dark band --------------------------------------------------------------
+   Redefines the token set rather than restyling each child. A Card, a
+   SectionHeading or a Badge dropped inside a dark section therefore adapts on
+   its own — there is no dark variant to remember to pass down, and nothing can
+   be left behind on the light palette by mistake. */
+.on-dark {
+  --background: var(--primary);
+  --surface: rgb(255 255 255 / 0.07);
+  --surface-muted: rgb(255 255 255 / 0.11);
+  --foreground: #ffffff;
+  --muted: #bdb7dd;
+  --border: rgb(255 255 255 / 0.16);
+  --border-strong: rgb(255 255 255 / 0.3);
+  --figure-emphasis: #ffffff;
+  --rate-accent: #7ee8cf;
+  --primary-light: rgb(255 255 255 / 0.12);
+  color: var(--foreground);
+}
+
+/* --- Scroll reveal ----------------------------------------------------------
+   The hidden state is scoped to `[data-js]`, which an inline script in the
+   layout sets before first paint. With scripting off the attribute never
+   appears and every section renders plainly visible, which is the behaviour
+   that matters: an animation must not be load-bearing for reading the page. */
+[data-js] [data-reveal] {
+  opacity: 0;
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+[data-js] [data-reveal="up"] {
+  transform: translateY(1.5rem);
+}
+
+[data-js] [data-reveal="scale"] {
+  transform: scale(0.96);
+}
+
+[data-js] [data-reveal][data-revealed] {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+
+/* A slow drift on a hero photograph, so the first screen is not a still. */
+@keyframes ds-hero-pan {
+  from {
+    transform: scale(1.06) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.14) translate3d(-1.2%, -1.4%, 0);
+  }
+}
+
+.ds-hero-image {
+  animation: ds-hero-pan 24s ease-in-out infinite alternate;
+}
+
+/* A marquee for the review strip: duplicated content translated by exactly
+   half its width, so the loop has no seam. Paused on hover so a reader can
+   actually finish a sentence. */
+@keyframes ds-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.ds-marquee {
+  animation: ds-marquee var(--marquee-duration, 60s) linear infinite;
+}
+
+.ds-marquee-viewport:hover .ds-marquee,
+.ds-marquee-viewport:focus-within .ds-marquee {
+  animation-play-state: paused;
+}
+
+/* Product card: lifts on hover, per § 5. Suppressed for pointer-coarse
+   devices, where there is no hover state to reward and the transform would
+   just fire on tap. */
+@media (hover: hover) {
+  .ds-lift {
+    transition:
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .ds-lift:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-4px);
+  }
+}
+
+/* Form control focus: brand border plus a tinted ring (§ 5, "Champs de
+   formulaire"). The ring is drawn with box-shadow rather than outline so it
+   follows the control's own radius. */
+.ds-control:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* Step marker for the funnel timeline (§ 5, "Timeline d'étapes"). */
+.ds-step-marker {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+/* The payout bar. Its width is set by the server from the moment the fee
+   settled, so nothing here animates it forward: a CSS animation would restart
+   on every self-refresh of the page and replay the same first seconds. What is
+   animated is a sheen travelling along the filled part — enough to show the
+   wait is live, with no claim about how far along it is. */
+@keyframes ds-progress-sheen {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.ds-progress-waiting {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(255 255 255 / 0.45) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  animation: ds-progress-sheen 2.6s linear infinite;
+}
+
+@keyframes ds-progress-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+
+.ds-progress-pulse {
+  animation: ds-progress-pulse 1.8s ease-in-out infinite;
+}

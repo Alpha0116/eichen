@@ -1,0 +1,686 @@
+// Eichen — data model for the loan origination and servicing platform.
+//
+// Conventions
+//  * Money is stored as an Int in the currency's minor unit (cents). Never a
+//    float. Int caps at ~21.4 M EUR, far above any consumer loan.
+//  * Enum-like columns are String, and JSON payloads are String, because
+//    SQLite supports neither Prisma enums nor the Json scalar. The TypeScript
+//    union types in src/domain are the single source of truth for the allowed
+//    values, and src/server/json.ts does the typed parsing.
+//  * Moving to PostgreSQL is a change of `provider` below plus a migration;
+//    no column type in this file is SQLite-specific.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// --- Identity and access ----------------------------------------------------
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String
+  /// CUSTOMER | AGENT | RISK | ADMIN
+  role              String    @default("CUSTOMER")
+  locale            String    @default("de")
+  firstName         String?
+  lastName          String?
+  /// Agents, risk and admin roles must complete a second factor; customers may.
+  /// The secret is only promoted from mfaPendingSecret once the user has
+  /// proved they can generate a code from it, so a half-finished enrolment
+  /// never locks anyone out.
+  mfaSecret         String?
+  mfaPendingSecret  String?
+  mfaEnabled        Boolean   @default(false)
+  mfaEnrolledAt     DateTime?
+  /// Highest TOTP step already accepted, so a code cannot be replayed within
+  /// the period it stays otherwise valid for.
+  mfaLastStep       Int?
+  mfaFailedAttempts Int       @default(0)
+  failedLogins      Int       @default(0)
+  lockedUntil       DateTime?
+  /// A password set by somebody other than its owner — a seeded account, a
+  /// reset by an administrator — is a password two people know. The account
+  /// carries this until it has chosen one of its own, and every guard sends it
+  /// to the change form until then.
+  mustChangePassword Boolean  @default(false)
+  createdAt         DateTime  @default(now())
+  lastLoginAt       DateTime?
+
+  sessions      Session[]
+  recoveryCodes MfaRecoveryCode[]
+  applications  Application[]
+  consents      Consent[]
+  tickets       Ticket[]
+  dataRequests  DataRequest[]
+
+  @@index([role])
+}
+
+model Session {
+  id            String   @id @default(cuid())
+  userId        String
+  /// A session awaiting its second factor. It authenticates nobody:
+  /// getSessionUser ignores it, and only the MFA step can promote it.
+  mfaPending    Boolean  @default(false)
+  /// Only the hash of the session token is stored; the token itself lives in
+  /// an HttpOnly cookie and is never persisted.
+  tokenHash     String   @unique
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+  userAgentHash String?
+  ipHash        String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Single-use recovery codes, stored only as hashes. They are the way back in
+/// when an agent loses their phone, which is otherwise a support ticket that
+/// ends in someone disabling MFA over the telephone.
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// --- Discovery --------------------------------------------------------------
+
+/// An anonymous simulation. Carries no personal data by design: this is the
+/// stage the reference funnel insists must not require an account.
+model Simulation {
+  id            String   @id @default(cuid())
+  amount        Int
+  termMonths    Int
+  purpose       String
+  currency      String   @default("EUR")
+  country       String   @default("DE")
+  locale        String   @default("de")
+  /// Indicative figures at the moment of simulation, for later comparison.
+  quoteJson     String
+  createdAt     DateTime @default(now())
+  /// Set when the visitor later turns this simulation into an application.
+  applicationId String?
+
+  @@index([createdAt])
+}
+
+// --- Origination ------------------------------------------------------------
+
+model Application {
+  id        String  @id @default(cuid())
+  /// Human-readable reference shown to the borrower and used by support.
+  reference String  @unique
+  userId    String?
+  /// See src/domain/application/states.ts
+  state     String  @default("DRAFT")
+  country   String  @default("DE")
+  currency  String  @default("EUR")
+  locale    String  @default("de")
+
+  amount        Int
+  termMonths    Int
+  purpose       String
+  /// Amount actually granted, which an administrator may cut below the request.
+  grantedAmount Int?
+
+  /// Whether the borrower asked for a SCHUFA check to be included. Declarative
+  /// only: it is recorded because it was offered and chosen, and it changes
+  /// neither the price nor the decision.
+  schufaOptIn Boolean @default(false)
+
+  /// Payout destination, collected with the rest of the file. Only the masked
+  /// form is ever stored; the full IBAN stays with the payment provider.
+  bankName   String?
+  maskedIban String?
+
+  /// Hash of the resume link token, so a draft can be reopened from an email
+  /// without the raw token ever being stored.
+  resumeTokenHash String?   @unique
+  expiresAt       DateTime?
+
+  ruleSetKey     String?
+  ruleSetVersion Int?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  submittedAt DateTime?
+  decidedAt   DateTime?
+
+  user           User?            @relation(fields: [userId], references: [id])
+  applicants     Applicant[]
+  household      Household?
+  consents       Consent[]
+  decisions      DecisionRecord[]
+  offers         Offer[]
+  documents      Document[]
+  bureauChecks   BureauCheck[]
+  bankChecks     BankCheck[]
+  identityChecks IdentityCheck[]
+  contracts      Contract[]
+  accountFee     AccountFee?
+  loan           Loan?
+  auditTrail     AuditEntry[]
+  notifications  Notification[]
+  tickets        Ticket[]
+
+  @@index([userId])
+  @@index([state])
+  @@index([createdAt])
+}
+
+model Applicant {
+  id            String @id @default(cuid())
+  applicationId String
+  /// PRIMARY | CO_BORROWER
+  role          String @default("PRIMARY")
+
+  firstName           String
+  lastName            String
+  birthDate           String
+  email               String
+  phone               String
+  street              String
+  postalCode          String
+  city                String
+  country             String @default("DE")
+  residentSinceMonths Int    @default(0)
+
+  employmentType      String
+  employerName        String?
+  employedSinceMonths Int     @default(0)
+  employmentEndsOn    String?
+  netMonthlyIncome    Int     @default(0)
+  otherMonthlyIncome  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, role])
+}
+
+model Household {
+  id            String @id @default(cuid())
+  applicationId String @unique
+
+  adults                  Int    @default(1)
+  children                Int    @default(0)
+  /// RENT | OWN | WITH_PARENTS
+  housingStatus           String @default("RENT")
+  monthlyHousingCost      Int    @default(0)
+  existingLoanInstalments Int    @default(0)
+  otherFixedCosts         Int    @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+// --- Consent and compliance -------------------------------------------------
+
+model Consent {
+  id            String    @id @default(cuid())
+  applicationId String?
+  userId        String?
+  /// See src/domain/compliance/consents.ts
+  purpose       String
+  version       Int
+  granted       Boolean
+  /// Hash of the exact wording displayed, so the text can be proven later.
+  textHash      String
+  locale        String
+  grantedAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  /// Hashed, not raw: enough to correlate an abuse pattern, not enough to
+  /// rebuild a browsing profile.
+  ipHash        String?
+  userAgentHash String?
+
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, purpose])
+  @@index([userId, purpose])
+}
+
+/// Append-only. Rows are never updated or deleted; `hash` chains each entry to
+/// the previous one so tampering is detectable. See src/domain/compliance/audit.ts
+model AuditEntry {
+  id            String   @id @default(cuid())
+  applicationId String?
+  sequence      Int
+  action        String
+  /// CUSTOMER | AGENT | SYSTEM
+  actorType     String
+  actorId       String?
+  payloadJson   String
+  occurredAt    DateTime @default(now())
+  previousHash  String
+  hash          String
+
+  application Application? @relation(fields: [applicationId], references: [id])
+
+  @@unique([applicationId, sequence])
+  @@index([action])
+  @@index([occurredAt])
+}
+
+/// GDPR access, rectification and erasure requests.
+model DataRequest {
+  id         String    @id @default(cuid())
+  userId     String
+  /// ACCESS | ERASURE | RECTIFICATION | DECISION_REVIEW
+  kind       String
+  /// OPEN | IN_PROGRESS | FULFILLED | REFUSED
+  status     String    @default("OPEN")
+  message    String?
+  response   String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+// --- Risk -------------------------------------------------------------------
+
+/// A versioned rule set. Publishing never mutates a published row: it inserts
+/// a new version, so any past decision can be replayed against the exact
+/// configuration that produced it.
+model RuleSetRecord {
+  id          String    @id @default(cuid())
+  key         String
+  version     Int
+  country     String
+  /// DRAFT | PUBLISHED | ARCHIVED
+  status      String    @default("DRAFT")
+  payloadJson String
+  note        String?
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+  publishedBy String?
+
+  @@unique([key, version])
+  @@index([status])
+}
+
+model DecisionRecord {
+  id                   String   @id @default(cuid())
+  applicationId        String
+  /// ACCEPT | REFER | DECLINE
+  outcome              String
+  score                Int
+  grade                String?
+  ruleSetKey           String
+  ruleSetVersion       Int
+  /// Full input snapshot, so the decision is reproducible.
+  factsJson            String
+  firedRulesJson       String
+  principalReasonsJson String
+  affordabilityJson    String
+  createdAt            DateTime @default(now())
+
+  /// Human override, with the mandatory reason.
+  overriddenBy    String?
+  overrideOutcome String?
+  overrideReason  String?
+  overriddenAt    DateTime?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([outcome])
+}
+
+model BureauCheck {
+  id            String   @id @default(cuid())
+  applicationId String
+  /// NEUTRAL (Konditionsanfrage) | RECORDED (firm application)
+  enquiryType   String
+  status        String
+  score         Int?
+  negativeItems Int?
+  thinFile      Boolean  @default(false)
+  provider      String
+  checkedAt     DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model BankCheck {
+  id            String    @id @default(cuid())
+  applicationId String
+  sessionId     String    @unique
+  provider      String
+  /// NOT_STARTED | CONSENTED | VERIFIED | FAILED | SKIPPED
+  status        String    @default("CONSENTED")
+  resultJson    String?
+  prefillJson   String?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+// --- Offers -----------------------------------------------------------------
+
+model LenderProductRecord {
+  id          String   @id
+  lenderName  String
+  country     String
+  active      Boolean  @default(true)
+  payloadJson String
+  updatedAt   DateTime @updatedAt
+
+  offers Offer[]
+}
+
+model Offer {
+  id                  String    @id @default(cuid())
+  applicationId       String
+  productId           String
+  lenderName          String
+  /// INDICATIVE | SUBJECT_TO_VERIFICATION | BINDING
+  status              String
+  grade               String
+  nominalAnnualRate   Float
+  effectiveAnnualRate Float
+  instalment          Int
+  totalPayable        Int
+  totalCreditCost     Int
+  netAmount           Int
+  termMonths          Int
+  /// Full quote including the repayment plan and the insurance variant.
+  payloadJson         String
+  sponsored           Boolean   @default(false)
+  commissionBps       Int       @default(0)
+  validUntil          DateTime
+  createdAt           DateTime  @default(now())
+  selectedAt          DateTime?
+  /// Whether the borrower took the optional residual-debt insurance.
+  insuranceSelected   Boolean   @default(false)
+
+  application Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  product     LenderProductRecord @relation(fields: [productId], references: [id])
+
+  @@index([applicationId])
+}
+
+// --- Documents, identity, contract ------------------------------------------
+
+model Document {
+  id            String    @id @default(cuid())
+  applicationId String
+  /// ID_FRONT | ID_BACK | PAYSLIP | BANK_STATEMENT | TAX_ASSESSMENT | OTHER
+  kind          String
+  filename      String
+  mimeType      String
+  sizeBytes     Int
+  /// Key in the encrypted object store. The bytes never live in this database.
+  storageKey    String
+  sha256        String
+  /// RECEIVED | READABLE | VALIDATED | REJECTED
+  status        String    @default("RECEIVED")
+  rejectionCode String?
+  reviewNote    String?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  uploadedAt    DateTime  @default(now())
+  /// Set when a replacement supersedes this file.
+  replacedById  String?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, status])
+}
+
+model IdentityCheck {
+  id            String    @id @default(cuid())
+  applicationId String
+  sessionId     String    @unique
+  /// VIDEO_IDENT | DOCUMENT_UPLOAD | POST_IDENT
+  method        String
+  provider      String
+  status        String    @default("PENDING")
+  failureCode   String?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model Contract {
+  id                       String    @id @default(cuid())
+  applicationId            String
+  version                  Int       @default(1)
+  /// Hash of the exact bytes presented for signature.
+  documentHash             String
+  storageKey               String
+  /// Pre-contractual information (Art. 247 EGBGB) rendered alongside.
+  preContractualStorageKey String?
+  envelopeId               String?
+  provider                 String?
+  /// DRAFT | READY | SIGNED | EXPIRED | FAILED
+  status                   String    @default("DRAFT")
+  generatedAt              DateTime  @default(now())
+  signedAt                 DateTime?
+  evidenceHash             String?
+  /// SHA-256 of the handwritten stroke the borrower drew.
+  signatureHash            String?
+  /// Key of that stroke in the object store. The bytes never live here.
+  signatureStorageKey      String?
+  /// The signed copy: the presented document with the signature page appended.
+  signedStorageKey         String?
+  /// End of the statutory 14-day withdrawal period.
+  withdrawalUntil          DateTime?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+/// One-off account fee, issued after signature and settled before payout.
+///
+/// Separate from `Payment`, which records movements on a live loan: this one
+/// is charged while no loan exists yet, and it must be traceable on its own —
+/// what was asked, when, against which reference, and whether it settled.
+model AccountFee {
+  id                String    @id @default(cuid())
+  applicationId     String    @unique
+  amount            Int
+  currency          String    @default("EUR")
+  /// Payment reference the borrower quotes on the transfer.
+  reference         String    @unique
+  /// PENDING | PAID | EXPIRED
+  status            String    @default("PENDING")
+  /// How it was settled. CARD is the only way the fee can be paid.
+  method            String?
+  /// What the payment provider recognised the card as. No PAN is ever stored.
+  cardBrand         String?
+  /// Last four digits, for the receipt the borrower reads back.
+  cardLast4         String?
+  /// Reference returned by the payment provider once it settled.
+  providerReference String?
+  issuedAt          DateTime  @default(now())
+  dueBy             DateTime
+  paidAt            DateTime?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+// --- Servicing --------------------------------------------------------------
+
+model Loan {
+  id                  String    @id @default(cuid())
+  applicationId       String    @unique
+  reference           String    @unique
+  lenderName          String
+  currency            String    @default("EUR")
+  /// Capital the interest runs on, including any financed charges.
+  financedCapital     Int
+  netAmount           Int
+  nominalAnnualRate   Float
+  effectiveAnnualRate Float
+  termMonths          Int
+  instalment          Int
+  /// ACTIVE | CLOSED | DEFAULTED
+  status              String    @default("ACTIVE")
+  disbursedAt         DateTime?
+  maskedIban          String
+  mandateReference    String?
+  autopayEnabled      Boolean   @default(true)
+  closedAt            DateTime?
+  createdAt           DateTime  @default(now())
+
+  application Application       @relation(fields: [applicationId], references: [id])
+  instalments Instalment[]
+  payments    Payment[]
+  settlements SettlementQuote[]
+
+  @@index([status])
+}
+
+model Instalment {
+  id             String    @id @default(cuid())
+  loanId         String
+  index          Int
+  dueDate        DateTime
+  amount         Int
+  principal      Int
+  interest       Int
+  openingBalance Int
+  closingBalance Int
+  /// SCHEDULED | DUE | PAID | LATE | RETURNED | WAIVED
+  status         String    @default("SCHEDULED")
+  paidAt         DateTime?
+  /// Number of collection attempts, so a retry loop cannot run away.
+  attempts       Int       @default(0)
+
+  loan     Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@unique([loanId, index])
+  @@index([dueDate, status])
+}
+
+model Payment {
+  id           String    @id @default(cuid())
+  loanId       String
+  instalmentId String?
+  /// IN (collection from the borrower) | OUT (disbursement)
+  direction    String
+  amount       Int
+  currency     String    @default("EUR")
+  /// SUBMITTED | SETTLED | RETURNED | FAILED
+  status       String
+  reference    String    @unique
+  returnCode   String?
+  valueDate    DateTime?
+  /// EARLY_REPAYMENT | INSTALMENT | MANUAL | DISBURSEMENT
+  kind         String    @default("INSTALMENT")
+  createdAt    DateTime  @default(now())
+  reconciledAt DateTime?
+
+  loan       Loan        @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  instalment Instalment? @relation(fields: [instalmentId], references: [id])
+
+  @@index([loanId, status])
+}
+
+model SettlementQuote {
+  id                   String    @id @default(cuid())
+  loanId               String
+  outstandingPrincipal Int
+  accruedInterest      Int
+  compensation         Int
+  compensationCapRate  Float
+  interestSaved        Int
+  totalToPay           Int
+  reasonsJson          String
+  settlementDate       DateTime
+  validUntil           DateTime
+  createdAt            DateTime  @default(now())
+  acceptedAt           DateTime?
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId])
+}
+
+// --- Communication and support ----------------------------------------------
+
+model Notification {
+  id            String   @id @default(cuid())
+  applicationId String?
+  channel       String
+  recipient     String
+  templateKey   String
+  locale        String
+  variablesJson String
+  status        String
+  messageId     String?
+  sentAt        DateTime @default(now())
+
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model Ticket {
+  id            String   @id @default(cuid())
+  applicationId String?
+  userId        String?
+  subject       String
+  /// OPEN | PENDING_CUSTOMER | RESOLVED
+  status        String   @default("OPEN")
+  /// LOW | NORMAL | HIGH
+  priority      String   @default("NORMAL")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application?    @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages    TicketMessage[]
+
+  @@index([status])
+}
+
+model TicketMessage {
+  id         String   @id @default(cuid())
+  ticketId   String
+  /// CUSTOMER | AGENT
+  authorType String
+  authorId   String?
+  body       String
+  createdAt  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}

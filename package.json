@@ -1,0 +1,53 @@
+{
+  "name": "eichen",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/unit/*.test.ts",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset --force",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:demo": "tsx scripts/seed-demo.ts",
+    "db:clear-applications": "tsx scripts/clear-applications.ts",
+    "db:reset-accounts": "tsx scripts/reset-accounts.ts",
+    "mail:test": "tsx scripts/mail-test.ts",
+    "db:studio": "prisma studio",
+    "jobs:collect": "tsx scripts/collect-instalments.ts",
+    "test:journey": "DATABASE_URL=file:./test.db tsx --test tests/integration/*.test.ts",
+    "test:journey:reset": "rm -f prisma/test.db prisma/test.db-journal && DATABASE_URL=file:./test.db prisma migrate deploy && DATABASE_URL=file:./test.db tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "next": "15.5.25",
+    "nodemailer": "^10.0.1",
+    "pdf-lib": "^1.17.1",
+    "prisma": "^6.19.3",
+    "qrcode": "^1.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.25",
+    "puppeteer-core": "^24.43.1",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.13",
+    "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
