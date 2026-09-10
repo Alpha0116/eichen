@@ -20,7 +20,7 @@ import { CONTACT } from "../src/server/config";
  *   npx tsx scripts/reset-accounts.ts --yes
  */
 
-/** Readable, and from a real random source rather than a keyboard pattern. */
+/** Readable, and from a real random source rather than a keyboard pattern. now update script */
 function generatePassword(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   const bytes = randomBytes(20);
