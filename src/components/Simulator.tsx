@@ -187,9 +187,19 @@ export function Simulator({
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="sim-term" className="block text-sm font-medium">
-              {t.termLabel}
-            </label>
+            <div className="flex items-baseline justify-between gap-3">
+              <label htmlFor="sim-term" className="text-sm font-medium">
+                {t.termLabel}
+              </label>
+              {/* A plain span holding one piece of text, not an `output` built
+                  from three. The read-out beside this slider once sat at its
+                  default while the slider moved underneath it, and those were
+                  its two differences from the amount above, which never had
+                  the problem. */}
+              <span className="tabular text-lg font-semibold">
+                {`${formatNumber(termMonths, locale)} ${dictionary.common.months}`}
+              </span>
+            </div>
             <input
               id="sim-term"
               ref={termRef}
