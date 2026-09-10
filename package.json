@@ -19,8 +19,11 @@
     "mail:test": "tsx scripts/mail-test.ts",
     "db:studio": "prisma studio",
     "jobs:collect": "tsx scripts/collect-instalments.ts",
-    "test:journey": "DATABASE_URL=file:./test.db tsx --test tests/integration/*.test.ts",
-    "test:journey:reset": "rm -f prisma/test.db prisma/test.db-journal && DATABASE_URL=file:./test.db prisma migrate deploy && DATABASE_URL=file:./test.db tsx prisma/seed.ts"
+    "test:journey": "DATABASE_URL=${TEST_DATABASE_URL:-postgresql://eichen:eichen@127.0.0.1:55432/eichen_test} tsx --test tests/integration/*.test.ts",
+    "test:journey:reset": "DATABASE_URL=${TEST_DATABASE_URL:-postgresql://eichen:eichen@127.0.0.1:55432/eichen_test} prisma migrate deploy && DATABASE_URL=${TEST_DATABASE_URL:-postgresql://eichen:eichen@127.0.0.1:55432/eichen_test} tsx prisma/seed.ts",
+    "test:db:fresh": "docker exec eichen-pg psql -U eichen -d postgres -c 'DROP DATABASE IF EXISTS eichen_test WITH (FORCE)' -c 'CREATE DATABASE eichen_test'",
+    "db:up": "docker start eichen-pg || docker run -d --name eichen-pg --restart unless-stopped -v eichen-pg-data:/var/lib/postgresql/data -e POSTGRES_USER=eichen -e POSTGRES_PASSWORD=eichen -e POSTGRES_DB=eichen_dev -p 55432:5432 postgres:16-alpine",
+    "db:down": "docker stop eichen-pg"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

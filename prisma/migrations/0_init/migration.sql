@@ -1,6 +1,9 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateTable
 CREATE TABLE "User" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "role" TEXT NOT NULL DEFAULT 'CUSTOMER',
@@ -8,29 +11,49 @@ CREATE TABLE "User" (
     "firstName" TEXT,
     "lastName" TEXT,
     "mfaSecret" TEXT,
+    "mfaPendingSecret" TEXT,
     "mfaEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "mfaEnrolledAt" TIMESTAMP(3),
+    "mfaLastStep" INTEGER,
+    "mfaFailedAttempts" INTEGER NOT NULL DEFAULT 0,
     "failedLogins" INTEGER NOT NULL DEFAULT 0,
-    "lockedUntil" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "lastLoginAt" DATETIME
+    "lockedUntil" TIMESTAMP(3),
+    "mustChangePassword" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastLoginAt" TIMESTAMP(3),
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Session" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
+    "mfaPending" BOOLEAN NOT NULL DEFAULT false,
     "tokenHash" TEXT NOT NULL,
-    "expiresAt" DATETIME NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "lastSeenAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "userAgentHash" TEXT,
     "ipHash" TEXT,
-    CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MfaRecoveryCode" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "codeHash" TEXT NOT NULL,
+    "usedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MfaRecoveryCode_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Simulation" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "amount" INTEGER NOT NULL,
     "termMonths" INTEGER NOT NULL,
     "purpose" TEXT NOT NULL,
@@ -38,13 +61,15 @@ CREATE TABLE "Simulation" (
     "country" TEXT NOT NULL DEFAULT 'DE',
     "locale" TEXT NOT NULL DEFAULT 'de',
     "quoteJson" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "applicationId" TEXT
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "applicationId" TEXT,
+
+    CONSTRAINT "Simulation_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Application" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "reference" TEXT NOT NULL,
     "userId" TEXT,
     "state" TEXT NOT NULL DEFAULT 'DRAFT',
@@ -55,20 +80,24 @@ CREATE TABLE "Application" (
     "termMonths" INTEGER NOT NULL,
     "purpose" TEXT NOT NULL,
     "grantedAmount" INTEGER,
+    "schufaOptIn" BOOLEAN NOT NULL DEFAULT false,
+    "bankName" TEXT,
+    "maskedIban" TEXT,
     "resumeTokenHash" TEXT,
-    "expiresAt" DATETIME,
+    "expiresAt" TIMESTAMP(3),
     "ruleSetKey" TEXT,
     "ruleSetVersion" INTEGER,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "submittedAt" DATETIME,
-    "decidedAt" DATETIME,
-    CONSTRAINT "Application_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "submittedAt" TIMESTAMP(3),
+    "decidedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Application_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Applicant" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "role" TEXT NOT NULL DEFAULT 'PRIMARY',
     "firstName" TEXT NOT NULL,
@@ -87,14 +116,15 @@ CREATE TABLE "Applicant" (
     "employmentEndsOn" TEXT,
     "netMonthlyIncome" INTEGER NOT NULL DEFAULT 0,
     "otherMonthlyIncome" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Applicant_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Applicant_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Household" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "adults" INTEGER NOT NULL DEFAULT 1,
     "children" INTEGER NOT NULL DEFAULT 0,
@@ -102,13 +132,14 @@ CREATE TABLE "Household" (
     "monthlyHousingCost" INTEGER NOT NULL DEFAULT 0,
     "existingLoanInstalments" INTEGER NOT NULL DEFAULT 0,
     "otherFixedCosts" INTEGER NOT NULL DEFAULT 0,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Household_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Household_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Consent" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT,
     "userId" TEXT,
     "purpose" TEXT NOT NULL,
@@ -116,59 +147,63 @@ CREATE TABLE "Consent" (
     "granted" BOOLEAN NOT NULL,
     "textHash" TEXT NOT NULL,
     "locale" TEXT NOT NULL,
-    "grantedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "revokedAt" DATETIME,
+    "grantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "revokedAt" TIMESTAMP(3),
     "ipHash" TEXT,
     "userAgentHash" TEXT,
-    CONSTRAINT "Consent_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Consent_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "Consent_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "AuditEntry" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT,
     "sequence" INTEGER NOT NULL,
     "action" TEXT NOT NULL,
     "actorType" TEXT NOT NULL,
     "actorId" TEXT,
     "payloadJson" TEXT NOT NULL,
-    "occurredAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "occurredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "previousHash" TEXT NOT NULL,
     "hash" TEXT NOT NULL,
-    CONSTRAINT "AuditEntry_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+
+    CONSTRAINT "AuditEntry_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "DataRequest" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'OPEN',
     "message" TEXT,
     "response" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "resolvedAt" DATETIME,
-    CONSTRAINT "DataRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolvedAt" TIMESTAMP(3),
+
+    CONSTRAINT "DataRequest_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "RuleSetRecord" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
     "version" INTEGER NOT NULL,
     "country" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
     "payloadJson" TEXT NOT NULL,
     "note" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "publishedAt" DATETIME,
-    "publishedBy" TEXT
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "publishedAt" TIMESTAMP(3),
+    "publishedBy" TEXT,
+
+    CONSTRAINT "RuleSetRecord_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "DecisionRecord" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "outcome" TEXT NOT NULL,
     "score" INTEGER NOT NULL,
@@ -179,17 +214,18 @@ CREATE TABLE "DecisionRecord" (
     "firedRulesJson" TEXT NOT NULL,
     "principalReasonsJson" TEXT NOT NULL,
     "affordabilityJson" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "overriddenBy" TEXT,
     "overrideOutcome" TEXT,
     "overrideReason" TEXT,
-    "overriddenAt" DATETIME,
-    CONSTRAINT "DecisionRecord_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "overriddenAt" TIMESTAMP(3),
+
+    CONSTRAINT "DecisionRecord_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "BureauCheck" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "enquiryType" TEXT NOT NULL,
     "status" TEXT NOT NULL,
@@ -197,44 +233,48 @@ CREATE TABLE "BureauCheck" (
     "negativeItems" INTEGER,
     "thinFile" BOOLEAN NOT NULL DEFAULT false,
     "provider" TEXT NOT NULL,
-    "checkedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "BureauCheck_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "checkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BureauCheck_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "BankCheck" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "sessionId" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'CONSENTED',
     "resultJson" TEXT,
     "prefillJson" TEXT,
-    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "completedAt" DATETIME,
-    CONSTRAINT "BankCheck_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+
+    CONSTRAINT "BankCheck_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "LenderProductRecord" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "lenderName" TEXT NOT NULL,
     "country" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "payloadJson" TEXT NOT NULL,
-    "updatedAt" DATETIME NOT NULL
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "LenderProductRecord_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Offer" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "lenderName" TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "grade" TEXT NOT NULL,
-    "nominalAnnualRate" REAL NOT NULL,
-    "effectiveAnnualRate" REAL NOT NULL,
+    "nominalAnnualRate" DOUBLE PRECISION NOT NULL,
+    "effectiveAnnualRate" DOUBLE PRECISION NOT NULL,
     "instalment" INTEGER NOT NULL,
     "totalPayable" INTEGER NOT NULL,
     "totalCreditCost" INTEGER NOT NULL,
@@ -243,17 +283,17 @@ CREATE TABLE "Offer" (
     "payloadJson" TEXT NOT NULL,
     "sponsored" BOOLEAN NOT NULL DEFAULT false,
     "commissionBps" INTEGER NOT NULL DEFAULT 0,
-    "validUntil" DATETIME NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "selectedAt" DATETIME,
+    "validUntil" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "selectedAt" TIMESTAMP(3),
     "insuranceSelected" BOOLEAN NOT NULL DEFAULT false,
-    CONSTRAINT "Offer_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Offer_productId_fkey" FOREIGN KEY ("productId") REFERENCES "LenderProductRecord" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+
+    CONSTRAINT "Offer_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Document" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
     "filename" TEXT NOT NULL,
@@ -265,29 +305,31 @@ CREATE TABLE "Document" (
     "rejectionCode" TEXT,
     "reviewNote" TEXT,
     "reviewedBy" TEXT,
-    "reviewedAt" DATETIME,
-    "uploadedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewedAt" TIMESTAMP(3),
+    "uploadedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "replacedById" TEXT,
-    CONSTRAINT "Document_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "Document_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "IdentityCheck" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "sessionId" TEXT NOT NULL,
     "method" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "failureCode" TEXT,
-    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "completedAt" DATETIME,
-    CONSTRAINT "IdentityCheck_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+
+    CONSTRAINT "IdentityCheck_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Contract" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "version" INTEGER NOT NULL DEFAULT 1,
     "documentHash" TEXT NOT NULL,
@@ -296,56 +338,81 @@ CREATE TABLE "Contract" (
     "envelopeId" TEXT,
     "provider" TEXT,
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
-    "generatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "signedAt" DATETIME,
+    "generatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "signedAt" TIMESTAMP(3),
     "evidenceHash" TEXT,
-    "withdrawalUntil" DATETIME,
-    CONSTRAINT "Contract_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "signatureHash" TEXT,
+    "signatureStorageKey" TEXT,
+    "signedStorageKey" TEXT,
+    "withdrawalUntil" TIMESTAMP(3),
+
+    CONSTRAINT "Contract_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AccountFee" (
+    "id" TEXT NOT NULL,
+    "applicationId" TEXT NOT NULL,
+    "amount" INTEGER NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'EUR',
+    "reference" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "method" TEXT,
+    "cardBrand" TEXT,
+    "cardLast4" TEXT,
+    "providerReference" TEXT,
+    "issuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "dueBy" TIMESTAMP(3) NOT NULL,
+    "paidAt" TIMESTAMP(3),
+
+    CONSTRAINT "AccountFee_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Loan" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
     "reference" TEXT NOT NULL,
     "lenderName" TEXT NOT NULL,
     "currency" TEXT NOT NULL DEFAULT 'EUR',
     "financedCapital" INTEGER NOT NULL,
     "netAmount" INTEGER NOT NULL,
-    "nominalAnnualRate" REAL NOT NULL,
-    "effectiveAnnualRate" REAL NOT NULL,
+    "nominalAnnualRate" DOUBLE PRECISION NOT NULL,
+    "effectiveAnnualRate" DOUBLE PRECISION NOT NULL,
     "termMonths" INTEGER NOT NULL,
     "instalment" INTEGER NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-    "disbursedAt" DATETIME,
+    "disbursedAt" TIMESTAMP(3),
     "maskedIban" TEXT NOT NULL,
     "mandateReference" TEXT,
     "autopayEnabled" BOOLEAN NOT NULL DEFAULT true,
-    "closedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Loan_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    "closedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Loan_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Instalment" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "loanId" TEXT NOT NULL,
     "index" INTEGER NOT NULL,
-    "dueDate" DATETIME NOT NULL,
+    "dueDate" TIMESTAMP(3) NOT NULL,
     "amount" INTEGER NOT NULL,
     "principal" INTEGER NOT NULL,
     "interest" INTEGER NOT NULL,
     "openingBalance" INTEGER NOT NULL,
     "closingBalance" INTEGER NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'SCHEDULED',
-    "paidAt" DATETIME,
+    "paidAt" TIMESTAMP(3),
     "attempts" INTEGER NOT NULL DEFAULT 0,
-    CONSTRAINT "Instalment_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "Instalment_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Payment" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "loanId" TEXT NOT NULL,
     "instalmentId" TEXT,
     "direction" TEXT NOT NULL,
@@ -354,35 +421,36 @@ CREATE TABLE "Payment" (
     "status" TEXT NOT NULL,
     "reference" TEXT NOT NULL,
     "returnCode" TEXT,
-    "valueDate" DATETIME,
+    "valueDate" TIMESTAMP(3),
     "kind" TEXT NOT NULL DEFAULT 'INSTALMENT',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "reconciledAt" DATETIME,
-    CONSTRAINT "Payment_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Payment_instalmentId_fkey" FOREIGN KEY ("instalmentId") REFERENCES "Instalment" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reconciledAt" TIMESTAMP(3),
+
+    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "SettlementQuote" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "loanId" TEXT NOT NULL,
     "outstandingPrincipal" INTEGER NOT NULL,
     "accruedInterest" INTEGER NOT NULL,
     "compensation" INTEGER NOT NULL,
-    "compensationCapRate" REAL NOT NULL,
+    "compensationCapRate" DOUBLE PRECISION NOT NULL,
     "interestSaved" INTEGER NOT NULL,
     "totalToPay" INTEGER NOT NULL,
     "reasonsJson" TEXT NOT NULL,
-    "settlementDate" DATETIME NOT NULL,
-    "validUntil" DATETIME NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "acceptedAt" DATETIME,
-    CONSTRAINT "SettlementQuote_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "settlementDate" TIMESTAMP(3) NOT NULL,
+    "validUntil" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "acceptedAt" TIMESTAMP(3),
+
+    CONSTRAINT "SettlementQuote_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Notification" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT,
     "channel" TEXT NOT NULL,
     "recipient" TEXT NOT NULL,
@@ -391,33 +459,35 @@ CREATE TABLE "Notification" (
     "variablesJson" TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "messageId" TEXT,
-    "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Notification_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Ticket" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "applicationId" TEXT,
     "userId" TEXT,
     "subject" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'OPEN',
     "priority" TEXT NOT NULL DEFAULT 'NORMAL',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Ticket_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "Ticket_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Ticket_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "TicketMessage" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "ticketId" TEXT NOT NULL,
     "authorType" TEXT NOT NULL,
     "authorId" TEXT,
     "body" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "TicketMessage_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "Ticket" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TicketMessage_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -434,6 +504,12 @@ CREATE INDEX "Session_userId_idx" ON "Session"("userId");
 
 -- CreateIndex
 CREATE INDEX "Session_expiresAt_idx" ON "Session"("expiresAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MfaRecoveryCode_codeHash_key" ON "MfaRecoveryCode"("codeHash");
+
+-- CreateIndex
+CREATE INDEX "MfaRecoveryCode_userId_idx" ON "MfaRecoveryCode"("userId");
 
 -- CreateIndex
 CREATE INDEX "Simulation_createdAt_idx" ON "Simulation"("createdAt");
@@ -514,6 +590,15 @@ CREATE INDEX "IdentityCheck_applicationId_idx" ON "IdentityCheck"("applicationId
 CREATE INDEX "Contract_applicationId_idx" ON "Contract"("applicationId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "AccountFee_applicationId_key" ON "AccountFee"("applicationId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AccountFee_reference_key" ON "AccountFee"("reference");
+
+-- CreateIndex
+CREATE INDEX "AccountFee_status_idx" ON "AccountFee"("status");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Loan_applicationId_key" ON "Loan"("applicationId");
 
 -- CreateIndex
@@ -545,3 +630,85 @@ CREATE INDEX "Ticket_status_idx" ON "Ticket"("status");
 
 -- CreateIndex
 CREATE INDEX "TicketMessage_ticketId_idx" ON "TicketMessage"("ticketId");
+
+-- AddForeignKey
+ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MfaRecoveryCode" ADD CONSTRAINT "MfaRecoveryCode_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Application" ADD CONSTRAINT "Application_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Applicant" ADD CONSTRAINT "Applicant_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Household" ADD CONSTRAINT "Household_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Consent" ADD CONSTRAINT "Consent_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Consent" ADD CONSTRAINT "Consent_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditEntry" ADD CONSTRAINT "AuditEntry_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DataRequest" ADD CONSTRAINT "DataRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DecisionRecord" ADD CONSTRAINT "DecisionRecord_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BureauCheck" ADD CONSTRAINT "BureauCheck_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BankCheck" ADD CONSTRAINT "BankCheck_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Offer" ADD CONSTRAINT "Offer_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Offer" ADD CONSTRAINT "Offer_productId_fkey" FOREIGN KEY ("productId") REFERENCES "LenderProductRecord"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Document" ADD CONSTRAINT "Document_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "IdentityCheck" ADD CONSTRAINT "IdentityCheck_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Contract" ADD CONSTRAINT "Contract_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AccountFee" ADD CONSTRAINT "AccountFee_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Loan" ADD CONSTRAINT "Loan_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Instalment" ADD CONSTRAINT "Instalment_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_instalmentId_fkey" FOREIGN KEY ("instalmentId") REFERENCES "Instalment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SettlementQuote" ADD CONSTRAINT "SettlementQuote_loanId_fkey" FOREIGN KEY ("loanId") REFERENCES "Loan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "Application"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TicketMessage" ADD CONSTRAINT "TicketMessage_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "Ticket"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

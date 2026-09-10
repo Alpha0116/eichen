@@ -3,12 +3,12 @@
 // Conventions
 //  * Money is stored as an Int in the currency's minor unit (cents). Never a
 //    float. Int caps at ~21.4 M EUR, far above any consumer loan.
-//  * Enum-like columns are String, and JSON payloads are String, because
-//    SQLite supports neither Prisma enums nor the Json scalar. The TypeScript
-//    union types in src/domain are the single source of truth for the allowed
-//    values, and src/server/json.ts does the typed parsing.
-//  * Moving to PostgreSQL is a change of `provider` below plus a migration;
-//    no column type in this file is SQLite-specific.
+//  * Enum-like columns are String, and JSON payloads are String. The model was
+//    first written for SQLite, which has neither Prisma enums nor the Json
+//    scalar, and the columns were left as they are on the move to PostgreSQL:
+//    the TypeScript union types in src/domain are the single source of truth
+//    for the allowed values, and src/server/json.ts does the typed parsing.
+//  * The database is PostgreSQL. No column type here is engine-specific.
 
 generator client {
   provider = "prisma-client-js"
