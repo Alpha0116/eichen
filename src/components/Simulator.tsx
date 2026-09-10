@@ -187,14 +187,9 @@ export function Simulator({
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-baseline justify-between gap-3">
-              <label htmlFor="sim-term" className="text-sm font-medium">
-                {t.termLabel}
-              </label>
-              <output htmlFor="sim-term" className="tabular text-lg font-semibold">
-                {formatNumber(termMonths, locale)} {dictionary.common.months}
-              </output>
-            </div>
+            <label htmlFor="sim-term" className="block text-sm font-medium">
+              {t.termLabel}
+            </label>
             <input
               id="sim-term"
               ref={termRef}
