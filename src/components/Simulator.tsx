@@ -12,7 +12,9 @@ export interface SimulatorLimits {
   maxAmount: number;
   amountStep: number;
   defaultAmount: number;
-  termOptions: readonly number[];
+  minTermMonths: number;
+  maxTermMonths: number;
+  termStep: number;
   defaultTermMonths: number;
   defaultPurpose?: LoanPurpose;
   referenceRate: number;
@@ -61,22 +63,6 @@ function useWheelStep(
 }
 
 /**
- * Position of the option nearest a stored value.
- *
- * The slider's state is this index, never the months: deriving the months from
- * the index is total, while looking an index back up from the months is not —
- * a stored term that is not one of the offered ones yields -1, and a slider
- * whose value is -1 sits at its minimum and refuses to move off it.
- */
-function nearestTermIndex(options: readonly number[], value: number): number {
-  let best = 0;
-  for (let index = 1; index < options.length; index += 1) {
-    if (Math.abs(options[index] - value) < Math.abs(options[best] - value)) best = index;
-  }
-  return best;
-}
-
-/**
  * The anonymous simulator.
  *
  * It prices with `priceLoan` — the very module the server uses to quote real
@@ -104,10 +90,7 @@ export function Simulator({
   footnote?: string;
 }) {
   const [amount, setAmount] = useState(limits.defaultAmount);
-  const [termIndex, setTermIndex] = useState(() =>
-    nearestTermIndex(limits.termOptions, limits.defaultTermMonths),
-  );
-  const termMonths = limits.termOptions[termIndex] ?? limits.termOptions[0];
+  const [termMonths, setTermMonths] = useState(limits.defaultTermMonths);
   const [purpose, setPurpose] = useState<LoanPurpose>(limits.defaultPurpose ?? "FREE_USE");
   const [showSchedule, setShowSchedule] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -142,12 +125,15 @@ export function Simulator({
 
   const stepTerm = useCallback(
     (direction: 1 | -1) => {
-      const next = termIndex + direction;
-      if (next < 0 || next >= limits.termOptions.length) return false;
-      setTermIndex(next);
+      const next = Math.min(
+        limits.maxTermMonths,
+        Math.max(limits.minTermMonths, termMonths + direction * limits.termStep),
+      );
+      if (next === termMonths) return false;
+      setTermMonths(next);
       return true;
     },
-    [termIndex, limits.termOptions.length],
+    [termMonths, limits.termStep, limits.maxTermMonths, limits.minTermMonths],
   );
 
   useWheelStep(amountRef, stepAmount);
@@ -204,15 +190,15 @@ export function Simulator({
               id="sim-term"
               ref={termRef}
               type="range"
-              min={0}
-              max={limits.termOptions.length - 1}
-              step={1}
-              value={termIndex}
-              onChange={(event) => setTermIndex(Number(event.target.value))}
+              min={limits.minTermMonths}
+              max={limits.maxTermMonths}
+              step={limits.termStep}
+              value={termMonths}
+              onChange={(event) => setTermMonths(Number(event.target.value))}
             />
             <div className="flex justify-between text-xs text-[var(--muted)] tabular">
-              <span>{limits.termOptions[0]}</span>
-              <span>{limits.termOptions.at(-1)}</span>
+              <span>{limits.minTermMonths}</span>
+              <span>{limits.maxTermMonths}</span>
             </div>
           </div>
 

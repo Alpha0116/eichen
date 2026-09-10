@@ -19,9 +19,8 @@ export function clampAmount(amount: number): number {
 }
 
 export function clampTerm(termMonths: number): number {
-  return PRODUCT.termOptions.reduce((best, option) =>
-    Math.abs(option - termMonths) < Math.abs(best - termMonths) ? option : best,
-  );
+  const stepped = Math.round(termMonths / PRODUCT.termStep) * PRODUCT.termStep;
+  return Math.min(PRODUCT.maxTermMonths, Math.max(PRODUCT.minTermMonths, stepped));
 }
 
 /**

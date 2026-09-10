@@ -18,7 +18,9 @@ export const PRODUCT = {
   minTermMonths: 12,
   maxTermMonths: 120,
   defaultTermMonths: 48,
-  termOptions: [12, 24, 36, 48, 60, 72, 84, 96, 120],
+  /** A month at a time. The term is a range like the amount, not a short list
+      of round numbers a borrower has to pick the least wrong of. */
+  termStep: 1,
   referenceRate: 0.03,
   /** How long an unfinished application stays resumable. */
   draftTtlDays: 30,
