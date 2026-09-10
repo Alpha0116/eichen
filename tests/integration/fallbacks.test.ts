@@ -5,7 +5,7 @@ import { providers } from "../../src/adapters";
 import { db } from "../../src/server/db";
 import { createApplication, transition } from "../../src/server/services/application";
 import { grantConsent } from "../../src/server/services/consent";
-import { submitApplication, NoEligibleProductError } from "../../src/server/services/submission";
+import { submitApplication } from "../../src/server/services/submission";
 import {
   DocumentsIncompleteError,
   finaliseDecision,
@@ -110,15 +110,22 @@ async function withValidatedDocuments(applicationId: string) {
   }
 }
 
-test("an application outside the product's range is refused while it is still editable", async () => {
-  // Above the product maximum: there is nothing to price, so submission must
-  // fail here rather than park an unpriceable file in the queue.
+test("an amount above the catalogue is submitted rather than refused", async () => {
+  // The amount is not a ground for refusal. A request well above what the
+  // product describes is priced and queued like any other, because cutting it
+  // or turning it down is an administrator's judgement — the funnel does not
+  // make that decision on its own.
   const application = await applicationWithApplicant({ amount: 90_000_000 });
 
-  await assert.rejects(submitApplication(application.id), NoEligibleProductError);
+  await submitApplication(application.id);
 
-  const row = await db.application.findUniqueOrThrow({ where: { id: application.id } });
-  assert.equal(row.state, "DRAFT", "the borrower can still fix the amount");
+  const row = await db.application.findUniqueOrThrow({
+    where: { id: application.id },
+    include: { offers: true },
+  });
+  assert.equal(row.state, "SUBMITTED", "the file reaches the queue");
+  assert.equal(row.grantedAmount, 90_000_000, "the amount asked for is carried through");
+  assert.equal(row.offers.length, 1, "and it was priced");
 });
 
 test("an incomplete file cannot be approved, and says which documents are missing", async () => {

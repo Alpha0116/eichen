@@ -1161,7 +1161,7 @@ Unterschrift     {signatureHash}`,
     ibanInvalid: "Diese IBAN stimmt nicht. Bitte prüfen Sie die Ziffern.",
     notEligibleTitle: "Dieser Antrag ist so nicht möglich",
     notEligible:
-      "Betrag oder Laufzeit liegen außerhalb dessen, was wir anbieten. Bitte ändern Sie Ihre Angaben im ersten Schritt.",
+      "Ihre Angaben passen nicht zu den Bedingungen unseres Angebots — etwa Laufzeit, Verwendungszweck oder Beschäftigung. Bitte prüfen Sie sie im ersten Schritt.",
     fileTooLarge: "Die Datei ist größer als 10 MB.",
     fileType: "Erlaubt sind PDF, JPG und PNG.",
     stateConflict: "Dieser Schritt passt nicht zum aktuellen Stand des Vorgangs.",

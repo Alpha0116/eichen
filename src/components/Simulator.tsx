@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LoanPurpose } from "@/domain/application/types";
 import { priceLoan } from "@/domain/finance/quote";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "@/i18n/format";
@@ -30,6 +30,45 @@ const PURPOSES: LoanPurpose[] = [
 ];
 
 /**
+ * Turns a wheel over a slider into a step.
+ *
+ * No browser does this on its own — Chrome ignores the wheel on a range input
+ * entirely — so a control that visibly invites dragging looks inert to anyone
+ * who tries to scroll it instead. The listener is attached natively rather
+ * than through React's `onWheel`, which React registers as passive: calling
+ * `preventDefault` there does nothing.
+ *
+ * At either end of the range the event is left alone, so a page scroll that
+ * happens to pass over a slider already at its maximum is not swallowed by it.
+ */
+function useWheelStep(
+  ref: RefObject<HTMLInputElement | null>,
+  step: (direction: 1 | -1) => boolean,
+): void {
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    const onWheel = (event: WheelEvent) => {
+      const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+      if (delta === 0) return;
+      if (step(delta > 0 ? -1 : 1)) event.preventDefault();
+    };
+
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  }, [ref, step]);
+}
+
+/** The option nearest a stored value, so an unlisted term cannot strand the slider. */
+function nearestTerm(options: readonly number[], value: number): number {
+  return options.reduce(
+    (best, option) => (Math.abs(option - value) < Math.abs(best - value) ? option : best),
+    options[0],
+  );
+}
+
+/**
  * The anonymous simulator.
  *
  * It prices with `priceLoan` — the very module the server uses to quote real
@@ -57,7 +96,9 @@ export function Simulator({
   footnote?: string;
 }) {
   const [amount, setAmount] = useState(limits.defaultAmount);
-  const [termMonths, setTermMonths] = useState(limits.defaultTermMonths);
+  const [termMonths, setTermMonths] = useState(() =>
+    nearestTerm(limits.termOptions, limits.defaultTermMonths),
+  );
   const [purpose, setPurpose] = useState<LoanPurpose>(limits.defaultPurpose ?? "FREE_USE");
   const [showSchedule, setShowSchedule] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -73,6 +114,36 @@ export function Simulator({
       }),
     [amount, termMonths, limits.referenceRate],
   );
+
+  const amountRef = useRef<HTMLInputElement>(null);
+  const termRef = useRef<HTMLInputElement>(null);
+  const termIndex = limits.termOptions.indexOf(termMonths);
+
+  const stepAmount = useCallback(
+    (direction: 1 | -1) => {
+      const next = Math.min(
+        limits.maxAmount,
+        Math.max(limits.minAmount, amount + direction * limits.amountStep),
+      );
+      if (next === amount) return false;
+      setAmount(next);
+      return true;
+    },
+    [amount, limits.amountStep, limits.maxAmount, limits.minAmount],
+  );
+
+  const stepTerm = useCallback(
+    (direction: 1 | -1) => {
+      const next = termIndex + direction;
+      if (next < 0 || next >= limits.termOptions.length) return false;
+      setTermMonths(limits.termOptions[next]);
+      return true;
+    },
+    [termIndex, limits.termOptions],
+  );
+
+  useWheelStep(amountRef, stepAmount);
+  useWheelStep(termRef, stepTerm);
 
   const t = dictionary.simulator;
 
@@ -93,6 +164,7 @@ export function Simulator({
             </div>
             <input
               id="sim-amount"
+              ref={amountRef}
               type="range"
               min={limits.minAmount}
               max={limits.maxAmount}
@@ -117,11 +189,12 @@ export function Simulator({
             </div>
             <input
               id="sim-term"
+              ref={termRef}
               type="range"
               min={0}
               max={limits.termOptions.length - 1}
               step={1}
-              value={limits.termOptions.indexOf(termMonths)}
+              value={termIndex}
               onChange={(event) => setTermMonths(limits.termOptions[Number(event.target.value)])}
             />
             <div className="flex justify-between text-xs text-[var(--muted)] tabular">

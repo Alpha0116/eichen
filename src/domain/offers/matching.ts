@@ -40,8 +40,10 @@ function eligibilityIssues(
 
   if (product.country !== applicant.country) issues.push("ineligible.country");
   if (product.currency !== request.currency) issues.push("ineligible.currency");
-  if (amount < product.minAmount) issues.push("ineligible.amount_below_min");
-  if (amount > product.maxAmount) issues.push("ineligible.amount_above_max");
+  // The amount is never a ground for refusal. Whatever the borrower asks for
+  // is carried through to the back office, where a person decides — cutting a
+  // request to fit a product's bounds, or refusing it, is their judgement and
+  // not a rule the funnel applies on its own.
   if (request.termMonths < product.minTermMonths) issues.push("ineligible.term_below_min");
   if (request.termMonths > product.maxTermMonths) issues.push("ineligible.term_above_max");
   if (!product.allowedPurposes.includes(request.purpose)) issues.push("ineligible.purpose");
