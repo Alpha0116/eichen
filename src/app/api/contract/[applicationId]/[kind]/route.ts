@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApplicationAccess } from "@/server/access";
 import { recordAudit } from "@/server/audit";
 import { db } from "@/server/db";
-import { readStoredBytes, readStoredText } from "@/server/storage";
+import { StoredFileNotFoundError, readStoredBytes, readStoredText } from "@/server/storage";
 
 const KINDS = {
   contract: "storageKey",
@@ -68,8 +68,14 @@ export async function GET(
   let body: string | Buffer;
   try {
     body = html ? await readStoredText(storageKey) : await readStoredBytes(storageKey);
-  } catch {
-    return new NextResponse("Not found", { status: 404 });
+  } catch (error) {
+    // Only a missing file is a 404. A storage outage is a server fault and is
+    // left to surface as one, rather than telling the borrower their contract
+    // does not exist.
+    if (error instanceof StoredFileNotFoundError) {
+      return new NextResponse("Not found", { status: 404 });
+    }
+    throw error;
   }
 
   await recordAudit({
