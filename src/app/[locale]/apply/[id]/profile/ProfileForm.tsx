@@ -83,7 +83,6 @@ export function ProfileForm({
 
   const errorFor = (field: string) => {
     if (state.field !== field) return undefined;
-    if (state.error === "tooYoung") return dictionary.errors.tooYoung;
     if (state.error === "ibanInvalid") return dictionary.errors.ibanInvalid;
     return dictionary.errors.validation;
   };

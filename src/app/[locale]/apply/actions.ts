@@ -160,14 +160,6 @@ const profileSchema = z.object({
   coEmploymentType: z.string().optional(),
 });
 
-function isAdult(birthDate: string): boolean {
-  const born = new Date(birthDate);
-  if (Number.isNaN(born.getTime())) return false;
-  const eighteen = new Date(born);
-  eighteen.setUTCFullYear(eighteen.getUTCFullYear() + 18);
-  return eighteen <= new Date();
-}
-
 /**
  * Saves everything the file needs about the person: identity, the address they
  * live at, how they earn, what the household costs, and where a payout would
@@ -192,9 +184,8 @@ export async function saveProfileAction(
   }
   const data = parsed.data;
 
-  // Legal capacity is checked before anything is written: an application that
-  // cannot lawfully be concluded should not be built up in the first place.
-  if (!isAdult(data.birthDate)) return { error: "tooYoung", field: "birthDate" };
+  // No age gate here: the birth date is recorded as given and age is left to
+  // the rule set, where the risk team can see and change the thresholds.
 
   const masked = maskIban(data.iban);
   if (!masked) return { error: "ibanInvalid", field: "iban" };
