@@ -67,7 +67,6 @@ export async function generateMetadata({
     applicationName: SITE_NAME,
     title: { default: dictionary.meta.title, template: `%s — ${SITE_NAME}` },
     description: dictionary.meta.description,
-    icons: { icon: "/eichen-mark.png" },
     ...publicPageMetadata({
       locale: typedLocale,
       title: dictionary.meta.title,
