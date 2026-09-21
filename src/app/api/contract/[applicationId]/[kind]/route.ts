@@ -1,9 +1,8 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { NextResponse } from "next/server";
 import { requireApplicationAccess } from "@/server/access";
 import { recordAudit } from "@/server/audit";
 import { db } from "@/server/db";
+import { readStoredBytes, readStoredText } from "@/server/storage";
 
 const KINDS = {
   contract: "storageKey",
@@ -64,14 +63,11 @@ export async function GET(
       : contract?.[KINDS[kind as keyof typeof KINDS]];
   if (!contract || !storageKey) return new NextResponse("Not found", { status: 404 });
 
-  const root = process.env.DOCUMENT_STORAGE_DIR ?? "./.storage/documents";
   const contentType = contentTypeOf(storageKey);
   const html = contentType.startsWith("text/html");
   let body: string | Buffer;
   try {
-    body = html
-      ? await readFile(join(root, storageKey), "utf8")
-      : await readFile(join(root, storageKey));
+    body = html ? await readStoredText(storageKey) : await readStoredBytes(storageKey);
   } catch {
     return new NextResponse("Not found", { status: 404 });
   }

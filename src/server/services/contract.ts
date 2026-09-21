@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { providers } from "../../adapters";
 import type { Offer } from "../../domain/offers/types";
 import { addDays } from "../../domain/finance/dates";
@@ -8,6 +6,7 @@ import { recordAudit } from "../audit";
 import { CONTACT, PRODUCT, defaultInterestRate } from "../config";
 import { db } from "../db";
 import { fromJsonWithDates } from "../json";
+import { readStoredBytes, writeStored } from "../storage";
 import { idempotencyKey, withRetry } from "../providerCall";
 import { getDictionary, toLocale } from "../../i18n";
 import { formatDate, formatDateTime, formatMoney, formatPercent } from "../../i18n/format";
@@ -26,19 +25,10 @@ export class NoSelectedOfferError extends Error {
   }
 }
 
-function storageRoot(): string {
-  return process.env.DOCUMENT_STORAGE_DIR ?? "./.storage/documents";
-}
-
 async function storeBytes(applicationId: string, name: string, bytes: Buffer): Promise<string> {
   const key = `${applicationId}/${name}`;
-  await mkdir(join(storageRoot(), applicationId), { recursive: true });
-  await writeFile(join(storageRoot(), key), bytes, { mode: 0o600 });
+  await writeStored(key, bytes);
   return key;
-}
-
-async function readStored(key: string): Promise<Buffer> {
-  return readFile(join(storageRoot(), key));
 }
 
 async function contractDataFor(applicationId: string): Promise<ContractData> {
@@ -250,7 +240,7 @@ export async function signContract(
     }),
   ]);
   const signedPdf = await appendSignaturePage(
-    await readStored(contract.storageKey),
+    await readStoredBytes(contract.storageKey),
     {
       reference: signedApplication.reference,
       signerName: `${primary.firstName} ${primary.lastName}`.trim(),

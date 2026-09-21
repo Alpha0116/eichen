@@ -1,9 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { recordAudit } from "../audit";
 import { UPLOAD } from "../config";
 import { db } from "../db";
+import { writeStored } from "../storage";
 
 export const DOCUMENT_KINDS = [
   "ID_FRONT",
@@ -30,10 +29,6 @@ export class UploadRejected extends Error {
     super(code);
     this.name = "UploadRejected";
   }
-}
-
-function storageRoot(): string {
-  return process.env.DOCUMENT_STORAGE_DIR ?? "./.storage/documents";
 }
 
 /**
@@ -73,10 +68,7 @@ export async function uploadDocument(input: UploadInput) {
 
   const sha256 = createHash("sha256").update(input.bytes).digest("hex");
   const storageKey = `${input.applicationId}/${randomUUID()}`;
-  const absolute = join(storageRoot(), storageKey);
-
-  await mkdir(join(storageRoot(), input.applicationId), { recursive: true });
-  await writeFile(absolute, input.bytes, { mode: 0o600 });
+  await writeStored(storageKey, input.bytes);
 
   const document = await db.document.create({
     data: {
