@@ -4,6 +4,7 @@ import { z } from "zod";
 import { toLocale } from "@/i18n";
 import {
   AdminSetupRejected,
+  bootstrapAdminAccount,
   confirmAdminAccount,
   requestAdminAccount,
   type AdminSetupError,
@@ -21,6 +22,7 @@ const requestSchema = z.object({
   passwordRepeat: z.string().max(200),
   firstName: z.string().trim().max(80).optional(),
   lastName: z.string().trim().max(80).optional(),
+  bootstrapKey: z.string().trim().max(200).optional(),
 });
 
 const confirmSchema = z.object({
@@ -37,15 +39,23 @@ export async function requestAdminAction(
   if (!parsed.success) return { step: "request", error: "validation" };
   const data = parsed.data;
 
+  const account = {
+    email: data.email,
+    firstName: data.firstName || null,
+    lastName: data.lastName || null,
+    password: data.password,
+    passwordRepeat: data.passwordRepeat,
+    locale: toLocale(data.locale ?? ""),
+  };
+
   try {
-    const { inviteId } = await requestAdminAccount({
-      email: data.email,
-      firstName: data.firstName || null,
-      lastName: data.lastName || null,
-      password: data.password,
-      passwordRepeat: data.passwordRepeat,
-      locale: toLocale(data.locale ?? ""),
-    });
+    // A setup key skips the mail: the first account on an installation that
+    // cannot send any yet.
+    if (data.bootstrapKey) {
+      const { email } = await bootstrapAdminAccount({ ...account, bootstrapKey: data.bootstrapKey });
+      return { step: "done", email };
+    }
+    const { inviteId } = await requestAdminAccount(account);
     return { step: "confirm", inviteId, email: data.email.toLowerCase() };
   } catch (error) {
     if (error instanceof AdminSetupRejected) return { step: "request", error: error.code };

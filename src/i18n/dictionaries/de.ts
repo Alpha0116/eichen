@@ -880,6 +880,12 @@ export const de = {
     tooManyRequests: "Zu viele Anfragen in kurzer Zeit. Bitte versuchen Sie es in einer Stunde erneut.",
     codeInvalid: "Der Code stimmt nicht.",
     codeExpired: "Der Code ist abgelaufen oder wurde zu oft falsch eingegeben. Bitte fordern Sie einen neuen an.",
+    bootstrapKey: "Einrichtungsschlüssel",
+    bootstrapKeyHint:
+      "Nur für das allererste Konto einer Installation, die noch keine E-Mails versenden kann. Mit Schlüssel wird das Konto sofort angelegt, ohne Code per E-Mail.",
+    bootstrapKeyInvalid: "Der Einrichtungsschlüssel stimmt nicht.",
+    bootstrapClosed:
+      "Es gibt bereits ein Administratorkonto; der Einrichtungsschlüssel gilt nicht mehr. Fordern Sie stattdessen einen Code an.",
   },
 
   mfa: {

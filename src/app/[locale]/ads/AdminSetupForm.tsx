@@ -23,6 +23,10 @@ function errorMessage(dictionary: Dictionary, error: AdminSetupError | undefined
       return dictionary.adminSetup.codeInvalid;
     case "codeExpired":
       return dictionary.adminSetup.codeExpired;
+    case "bootstrapKeyInvalid":
+      return dictionary.adminSetup.bootstrapKeyInvalid;
+    case "bootstrapClosed":
+      return dictionary.adminSetup.bootstrapClosed;
     case "validation":
       return dictionary.errors.validation;
     default:
@@ -129,6 +133,9 @@ export function AdminSetupForm({
         </Field>
         <Field label={dictionary.auth.passwordRepeat} htmlFor="passwordRepeat" required>
           <Input id="passwordRepeat" name="passwordRepeat" type="password" autoComplete="new-password" required />
+        </Field>
+        <Field label={t.bootstrapKey} htmlFor="bootstrapKey" hint={t.bootstrapKeyHint} optionalLabel={dictionary.common.optional}>
+          <Input id="bootstrapKey" name="bootstrapKey" type="password" autoComplete="off" />
         </Field>
         <Button type="submit" disabled={pending}>
           {pending ? dictionary.common.loading : t.request}

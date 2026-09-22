@@ -25,6 +25,15 @@ export const CODE_TTL_MINUTES = 15;
 export const MAX_ATTEMPTS = 5;
 const MAX_REQUESTS_PER_HOUR = 5;
 
+/**
+ * SHA-256 of the setup key that opens the very first account without a
+ * mailed code — the way in when no mail can leave the server yet and nobody
+ * can reach the hosting account to change that. Only the digest is here; the
+ * key itself is with whoever set the site up. It is accepted solely while no
+ * administrator exists: the moment one does, it is inert, whoever holds it.
+ */
+const BOOTSTRAP_KEY_SHA256 = "863bee017f23b45587d6c83e8a0b1368114e4a62102b7b15646e24b09d8e15b6";
+
 export type AdminSetupError =
   | "validation"
   | "passwordMismatch"
@@ -33,7 +42,9 @@ export type AdminSetupError =
   | "emailTaken"
   | "tooManyRequests"
   | "codeInvalid"
-  | "codeExpired";
+  | "codeExpired"
+  | "bootstrapKeyInvalid"
+  | "bootstrapClosed";
 
 export class AdminSetupRejected extends Error {
   constructor(public readonly code: AdminSetupError) {
@@ -55,6 +66,80 @@ export interface RequestAdminInput {
   locale: Locale;
 }
 
+function bootstrapKeyMatches(key: string): boolean {
+  const expected = Buffer.from(BOOTSTRAP_KEY_SHA256, "hex");
+  const given = createHash("sha256").update(key.trim(), "utf8").digest();
+  return expected.length === given.length && timingSafeEqual(expected, given);
+}
+
+/** The checks both ways in share: the password is sound and the address free. */
+async function validateAccount(input: RequestAdminInput): Promise<string> {
+  if (input.password !== input.passwordRepeat) throw new AdminSetupRejected("passwordMismatch");
+  const issue = validatePassword(input.password);
+  if (issue) {
+    throw new AdminSetupRejected(issue.code === "too_short" ? "passwordTooShort" : "passwordTooCommon");
+  }
+  const email = input.email.trim().toLowerCase();
+  if (await db.user.findUnique({ where: { email }, select: { id: true } })) {
+    throw new AdminSetupRejected("emailTaken");
+  }
+  return email;
+}
+
+async function createAdmin(input: {
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  passwordHash: string;
+  /** What vouched for the account: the mailbox that read the code, or the setup key. */
+  confirmedVia: string;
+}) {
+  const user = await db.user.create({
+    data: {
+      email: input.email,
+      passwordHash: input.passwordHash,
+      role: "ADMIN",
+      locale: "de",
+      firstName: input.firstName,
+      lastName: input.lastName,
+      // Chosen by its owner on the request form: nobody else knows it.
+      mustChangePassword: false,
+    },
+  });
+  await recordAudit({
+    applicationId: null,
+    action: "admin_account_created",
+    actorType: "SYSTEM",
+    actorId: user.id,
+    payload: { email: user.email, confirmedVia: input.confirmedVia },
+  });
+  return user;
+}
+
+/**
+ * Opens the first administrator account against the setup key, no mail
+ * involved. Refused outright once any administrator exists, before the key
+ * is even looked at, so it cannot be used to add a second one.
+ */
+export async function bootstrapAdminAccount(
+  input: RequestAdminInput & { bootstrapKey: string },
+): Promise<{ email: string }> {
+  if ((await db.user.count({ where: { role: "ADMIN" } })) > 0) {
+    throw new AdminSetupRejected("bootstrapClosed");
+  }
+  if (!bootstrapKeyMatches(input.bootstrapKey)) throw new AdminSetupRejected("bootstrapKeyInvalid");
+
+  const email = await validateAccount(input);
+  const user = await createAdmin({
+    email,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    passwordHash: await hashPassword(input.password),
+    confirmedVia: "setup-key",
+  });
+  return { email: user.email };
+}
+
 /**
  * Records the account to be opened and sends the code that unlocks it.
  *
@@ -63,16 +148,7 @@ export interface RequestAdminInput {
  * it is the operations address, whatever the form said.
  */
 export async function requestAdminAccount(input: RequestAdminInput): Promise<{ inviteId: string }> {
-  if (input.password !== input.passwordRepeat) throw new AdminSetupRejected("passwordMismatch");
-  const issue = validatePassword(input.password);
-  if (issue) {
-    throw new AdminSetupRejected(issue.code === "too_short" ? "passwordTooShort" : "passwordTooCommon");
-  }
-
-  const email = input.email.trim().toLowerCase();
-  if (await db.user.findUnique({ where: { email }, select: { id: true } })) {
-    throw new AdminSetupRejected("emailTaken");
-  }
+  const email = await validateAccount(input);
 
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const recent = await db.adminInvite.count({ where: { createdAt: { gt: hourAgo } } });
@@ -151,30 +227,14 @@ export async function confirmAdminAccount(inviteId: string, code: string): Promi
     throw new AdminSetupRejected("emailTaken");
   }
 
-  const user = await db.$transaction(async (tx) => {
-    const created = await tx.user.create({
-      data: {
-        email: invite.email,
-        passwordHash: invite.passwordHash,
-        role: "ADMIN",
-        locale: "de",
-        firstName: invite.firstName,
-        lastName: invite.lastName,
-        // Chosen by its owner on the request form: nobody else knows it.
-        mustChangePassword: false,
-      },
-    });
-    await tx.adminInvite.delete({ where: { id: invite.id } });
-    return created;
+  const user = await createAdmin({
+    email: invite.email,
+    firstName: invite.firstName,
+    lastName: invite.lastName,
+    passwordHash: invite.passwordHash,
+    confirmedVia: CONTACT.opsEmail,
   });
-
-  await recordAudit({
-    applicationId: null,
-    action: "admin_account_created",
-    actorType: "SYSTEM",
-    actorId: user.id,
-    payload: { email: user.email, confirmedVia: CONTACT.opsEmail },
-  });
+  await db.adminInvite.delete({ where: { id: invite.id } });
 
   return { email: user.email };
 }

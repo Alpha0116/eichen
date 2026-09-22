@@ -7,6 +7,7 @@ import { db } from "../../src/server/db";
 import {
   AdminSetupRejected,
   MAX_ATTEMPTS,
+  bootstrapAdminAccount,
   confirmAdminAccount,
   requestAdminAccount,
 } from "../../src/server/services/adminSetup";
@@ -99,4 +100,36 @@ test("an expired code is refused", async () => {
   const code = lastCodeSent();
   await db.adminInvite.update({ where: { id: inviteId }, data: { expiresAt: new Date(Date.now() - 1000) } });
   await assert.rejects(confirmAdminAccount(inviteId, code), (e: AdminSetupRejected) => e.code === "codeExpired");
+});
+
+const bootstrap = (email: string, bootstrapKey: string) =>
+  bootstrapAdminAccount({
+    email,
+    firstName: null,
+    lastName: null,
+    password: "correct-horse-battery-staple",
+    passwordRepeat: "correct-horse-battery-staple",
+    locale: "de",
+    bootstrapKey,
+  });
+
+test("the setup key is refused whenever an administrator already exists", async () => {
+  // Earlier tests in this file created one; the key is not even looked at.
+  assert.ok((await db.user.count({ where: { role: "ADMIN" } })) > 0);
+  const email = freshEmail();
+  await assert.rejects(bootstrap(email, "whatever"), (e: AdminSetupRejected) => e.code === "bootstrapClosed");
+  assert.equal(await db.user.findUnique({ where: { email } }), null);
+});
+
+test("with no administrator, a wrong setup key is refused and creates nothing", async () => {
+  const admins = await db.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
+  // Step them aside for a moment: the door is only open on an empty installation.
+  await db.user.updateMany({ where: { role: "ADMIN" }, data: { role: "RISK" } });
+  try {
+    const email = freshEmail();
+    await assert.rejects(bootstrap(email, "not-the-key"), (e: AdminSetupRejected) => e.code === "bootstrapKeyInvalid");
+    assert.equal(await db.user.findUnique({ where: { email } }), null);
+  } finally {
+    await db.user.updateMany({ where: { id: { in: admins.map((a) => a.id) } }, data: { role: "ADMIN" } });
+  }
 });
