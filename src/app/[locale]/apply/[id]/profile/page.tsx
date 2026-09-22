@@ -13,6 +13,13 @@ function euros(value: number | undefined, filled: boolean): string {
   return ((value ?? 0) / 100).toFixed(2);
 }
 
+/** The same for a count of months: nothing entered yet shows the example, not
+    a zero that claims they moved in today. */
+function months(value: number | undefined, filled: boolean): string {
+  if (!filled) return "";
+  return String(value ?? 0);
+}
+
 export default async function ProfilePage({
   params,
 }: {
@@ -54,10 +61,10 @@ export default async function ProfilePage({
         street: primary?.street ?? "",
         postalCode: primary?.postalCode ?? "",
         city: primary?.city ?? "",
-        residentSinceMonths: primary?.residentSinceMonths ?? 0,
+        residentSinceMonths: months(primary?.residentSinceMonths, seen),
         employmentType: primary?.employmentType ?? "PERMANENT",
         employerName: primary?.employerName ?? "",
-        employedSinceMonths: primary?.employedSinceMonths ?? 0,
+        employedSinceMonths: months(primary?.employedSinceMonths, seen),
         employmentEndsOn: primary?.employmentEndsOn ?? "",
         netMonthlyIncome: euros(primary?.netMonthlyIncome, seen),
         otherMonthlyIncome: euros(primary?.otherMonthlyIncome, seen),
