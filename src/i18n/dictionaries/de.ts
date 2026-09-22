@@ -864,6 +864,24 @@ export const de = {
     sameAsOld: "Das neue Passwort muss sich vom bisherigen unterscheiden.",
   },
 
+  adminSetup: {
+    title: "Administratorkonto einrichten",
+    intro:
+      "Beschreiben Sie das Konto. Ein sechsstelliger Code geht an das Betriebspostfach von Eichen — erst wenn er hier eingegeben wird, wird das Konto angelegt.",
+    request: "Code anfordern",
+    codeTitle: "Code eingeben",
+    codeIntro:
+      "Der Code wurde an das Betriebspostfach geschickt und gilt {minutes} Minuten. Wer es liest, kann das Konto für {email} freischalten.",
+    codeLabel: "Bestätigungscode",
+    confirm: "Konto anlegen",
+    startOver: "Von vorn beginnen",
+    doneTitle: "Konto angelegt",
+    doneBody: "Das Administratorkonto für {email} ist eingerichtet. Melden Sie sich mit Ihrem Passwort an; danach richten Sie die Zwei-Faktor-Authentifizierung ein.",
+    tooManyRequests: "Zu viele Anfragen in kurzer Zeit. Bitte versuchen Sie es in einer Stunde erneut.",
+    codeInvalid: "Der Code stimmt nicht.",
+    codeExpired: "Der Code ist abgelaufen oder wurde zu oft falsch eingegeben. Bitte fordern Sie einen neuen an.",
+  },
+
   mfa: {
     title: "Zwei-Faktor-Authentifizierung",
     challengeTitle: "Bestätigen Sie Ihre Anmeldung",
@@ -1002,6 +1020,17 @@ export const de = {
   },
 
   notification: {
+    admin_setup_code: {
+      subject: "Bestätigungscode für ein neues Administratorkonto: {code}",
+      body: `Jemand möchte ein Administratorkonto für Eichen anlegen.
+
+Name       {name}
+E-Mail     {email}
+
+Bestätigungscode: {code}
+
+Der Code gilt {minutes} Minuten. Geben Sie ihn nur weiter, wenn Sie dieses Konto tatsächlich freischalten wollen — mit ihm erhält die Person vollen Zugang zum Backoffice. Wenn Sie diese Anfrage nicht erwarten, ignorieren Sie diese Nachricht; ohne den Code passiert nichts.`,
+    },
     application_incomplete: {
       subject: "Ihre Kreditanfrage ist noch nicht abgeschlossen",
       body: "Ihre Anfrage {reference} wartet noch auf Ihre Angaben. Sie können dort weitermachen, wo Sie aufgehört haben.",

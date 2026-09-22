@@ -63,6 +63,25 @@ model User {
   @@index([role])
 }
 
+/// A request to open an administrator account, waiting for the code that
+/// was sent to the operations mailbox. The page that creates these is public;
+/// what guards it is that the code only ever goes to that one mailbox, so
+/// only whoever reads it can finish. The password is hashed here and copied
+/// to the account on confirmation, never stored in the clear.
+model AdminInvite {
+  id           String   @id @default(cuid())
+  email        String
+  firstName    String?
+  lastName     String?
+  passwordHash String
+  codeHash     String
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([email])
+}
+
 model Session {
   id            String   @id @default(cuid())
   userId        String

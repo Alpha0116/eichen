@@ -14,7 +14,8 @@ export type NotificationTemplate =
   | "account_fee_due"
   | "disbursed"
   | "instalment_due"
-  | "payment_failed";
+  | "payment_failed"
+  | "admin_setup_code";
 
 export interface NotifyInput {
   applicationId: string | null;

@@ -34,6 +34,7 @@ export const AUDIT_ACTIONS = [
   "sensitive_data_viewed",
   "data_export_requested",
   "state_changed",
+  "admin_account_created",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
