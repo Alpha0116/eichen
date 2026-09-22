@@ -74,10 +74,16 @@ export async function submitApplication(
     drawdownDate: new Date(),
     status: "SUBJECT_TO_VERIFICATION",
     offerValidDays: PRODUCT.offerValidDays,
+    // Nothing a borrower can fill in refuses their own file. What does not
+    // fit the product is recorded as a reason on the decision and shown to
+    // the administrator, who decides.
+    ignoreEligibility: true,
   });
 
   const offer = offerSet.offers[0];
   if (!offer) {
+    // Only an empty catalogue reaches this now: there is no price to quote
+    // at all, which is a configuration fault rather than a borrower's.
     throw new NoEligibleProductError(offerSet.ineligible.flatMap((row) => row.reasonCodes));
   }
 

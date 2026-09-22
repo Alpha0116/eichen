@@ -7,7 +7,7 @@ import { createApplication, transition } from "../../src/server/services/applica
 import { grantConsent } from "../../src/server/services/consent";
 import { submitApplication } from "../../src/server/services/submission";
 import {
-  DocumentsIncompleteError,
+  deleteApplication,
   finaliseDecision,
   outstandingDocuments,
   returnForCorrection,
@@ -128,27 +128,22 @@ test("an amount above the catalogue is submitted rather than refused", async () 
   assert.equal(row.offers.length, 1, "and it was priced");
 });
 
-test("an incomplete file cannot be approved, and says which documents are missing", async () => {
+test("an incomplete file can be approved, and still says which documents are open", async () => {
   const application = await applicationWithApplicant();
   await submitApplication(application.id);
 
-  // Nothing was uploaded, so every required kind is outstanding — and the
-  // refusal carries the list, which is what the back office renders.
+  // Nothing was uploaded, so every required kind is outstanding — the list is
+  // what the back office shows the administrator, who decides anyway.
   const expected = await requiredDocuments(application.id);
   assert.ok(expected.length > 0);
   assert.deepEqual([...(await outstandingDocuments(application.id))].sort(), [...expected].sort());
 
-  await assert.rejects(
-    finaliseDecision(application.id, { agentId: "agent-test", outcome: "APPROVED" }),
-    (error: unknown) => {
-      assert.ok(error instanceof DocumentsIncompleteError);
-      assert.deepEqual([...error.missing].sort(), [...expected].sort());
-      return true;
-    },
-  );
+  await finaliseDecision(application.id, { agentId: "agent-test", outcome: "APPROVED" });
 
+  // Approved, and carried straight on to the contract like any other
+  // approval: the outstanding documents held nothing back.
   const row = await db.application.findUniqueOrThrow({ where: { id: application.id } });
-  assert.equal(row.state, "SUBMITTED", "a refused approval leaves the file where it was");
+  assert.equal(row.state, "CONTRACT_READY");
 });
 
 test("approving a complete file generates the contract in the same act", async () => {
@@ -264,4 +259,46 @@ test("a returned direct debit is recorded, not retried into a double debit", asy
   assert.ok(first.returnCode);
   // The same instalment returns the same outcome and the same reference.
   assert.deepEqual(first, second);
+});
+
+test("a request that fits no product is queued rather than refused", async () => {
+  // A term far beyond the catalogue's range, which used to be the one thing
+  // the funnel turned down on its own.
+  const application = await applicationWithApplicant({ termMonths: 600 });
+  await submitApplication(application.id);
+
+  const row = await db.application.findUniqueOrThrow({
+    where: { id: application.id },
+    include: { offers: true, decisions: { orderBy: { createdAt: "desc" }, take: 1 } },
+  });
+  assert.equal(row.state, "SUBMITTED");
+  assert.equal(row.offers.length, 1, "it is priced, so an administrator has something to act on");
+  assert.ok(row.decisions[0], "and the reasons are on the decision record");
+});
+
+test("deleting an application takes its documents and its audit trail with it", async () => {
+  const application = await applicationWithApplicant();
+  await withValidatedDocuments(application.id);
+  await submitApplication(application.id);
+
+  const documents = await db.document.findMany({ where: { applicationId: application.id } });
+  assert.ok(documents.length > 0);
+  const keys = documents.map((row) => row.storageKey);
+  assert.ok((await db.auditEntry.count({ where: { applicationId: application.id } })) > 0);
+
+  const { reference } = await deleteApplication(application.id, { agentId: "agent-test" });
+  assert.equal(reference, application.reference);
+
+  assert.equal(await db.application.findUnique({ where: { id: application.id } }), null);
+  assert.equal(await db.document.count({ where: { applicationId: application.id } }), 0);
+  assert.equal(await db.auditEntry.count({ where: { applicationId: application.id } }), 0);
+  assert.equal(await db.storedFile.count({ where: { key: { in: keys } } }), 0, "the bytes are gone too");
+
+  // The act itself survives what it destroyed.
+  const trace = await db.auditEntry.findFirst({
+    where: { action: "application_deleted", applicationId: null },
+    orderBy: { occurredAt: "desc" },
+  });
+  assert.ok(trace);
+  assert.match(trace.payloadJson, new RegExp(reference));
 });

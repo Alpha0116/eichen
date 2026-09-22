@@ -15,6 +15,15 @@ export interface MatchingInput {
   status: OfferStatus;
   offerValidDays?: number;
   now?: Date;
+  /**
+   * Price every product even when it does not fit the request.
+   *
+   * The issues are still collected, so the file says what does not match and
+   * an administrator sees it; what changes is that they no longer stop the
+   * application. Refusing is a person's decision taken on the file, not the
+   * catalogue's answer to a form.
+   */
+  ignoreEligibility?: boolean;
 }
 
 function ageAtMaturity(birthDate: string, termMonths: number, now: Date): number | null {
@@ -117,7 +126,7 @@ export function matchOffers(input: MatchingInput): OfferSet {
         lenderName: product.lenderName,
         reasonCodes: issues,
       });
-      continue;
+      if (!input.ignoreEligibility) continue;
     }
 
     const { rate, factors } = priceFor(product, input);

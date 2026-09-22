@@ -20,9 +20,12 @@ const IBAN_LENGTHS: Record<string, number> = {
   ES: 24,
 };
 
-function normalise(value: string): string {
+/** Spaces and dashes out, letters up: the form an IBAN is compared and stored in. */
+export function normaliseIban(value: string): string {
   return value.replace(/[\s-]/g, "").toUpperCase();
 }
+
+const normalise = normaliseIban;
 
 /**
  * ISO 13616 check digits, computed on the rearranged string with letters

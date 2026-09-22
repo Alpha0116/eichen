@@ -5,40 +5,13 @@ import { Alert, Button, Field, Input, Textarea } from "@/components/ui";
 import type { Dictionary } from "@/i18n";
 import type { BackofficeState } from "../../actions";
 
-export function OverrideForm({
-  dictionary,
-  action,
-}: {
-  dictionary: Dictionary;
-  action: (previous: BackofficeState, formData: FormData) => Promise<BackofficeState>;
-}) {
-  const [state, formAction, pending] = useActionState(action, {});
-  const t = dictionary.backoffice;
-
-  return (
-    <form action={formAction} className="space-y-3">
-      {state.error ? <Alert tone="danger">{t.overrideReasonHint}</Alert> : null}
-      <Field label={t.overrideReason} htmlFor="reason" hint={t.overrideReasonHint} required>
-        <Textarea id="reason" name="reason" rows={3} required minLength={10} aria-describedby="reason-hint" />
-      </Field>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" name="outcome" value="ACCEPT" size="sm" disabled={pending}>
-          {t.overrideApprove}
-        </Button>
-        <Button type="submit" name="outcome" value="DECLINE" size="sm" variant="danger" disabled={pending}>
-          {t.overrideDecline}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 /**
  * The decision itself: approve, approve for less, or refuse.
  *
  * Approving also generates the contract, so this form is the single moment a
  * person commits the platform to anything. Leaving the amount blank grants
- * what was asked for.
+ * what was asked for. Documents still open are named above the buttons as a
+ * note, not a gate: what they are worth is the decision being taken here.
  */
 export function FinaliseForm({
   dictionary,
@@ -50,32 +23,26 @@ export function FinaliseForm({
   action: (previous: BackofficeState, formData: FormData) => Promise<BackofficeState>;
   /** In euros, as a placeholder, so "blank means as requested" is visible. */
   requestedAmount: string;
-  /** Document kinds still to review. Approval is refused while any remain. */
+  /** Document kinds still to review, shown as a reminder. */
   outstandingDocuments: string[];
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const t = dictionary.backoffice;
   const kinds = dictionary.documents.kinds as Record<string, string>;
-  // Known before the click, not discovered by it: an approve button that
-  // always fails on this file is worse than one that says why up front.
-  const blocked = outstandingDocuments.length > 0;
-  const missing = state.error === "documentsIncomplete" ? (state.details ?? []) : outstandingDocuments;
 
   return (
     <form action={formAction} className="space-y-3">
-      {blocked || state.error === "documentsIncomplete" ? (
-        <Alert tone="warning" title={t.approveBlockedTitle}>
-          <p>{t.approveBlockedBody}</p>
+      {outstandingDocuments.length > 0 ? (
+        <Alert tone="warning" variant="outline">
+          <p>{t.outstandingDocuments}</p>
           <ul className="mt-2 list-inside list-disc">
-            {missing.map((kind) => (
+            {outstandingDocuments.map((kind) => (
               <li key={kind}>{kinds[kind] ?? kind}</li>
             ))}
           </ul>
         </Alert>
       ) : null}
-      {state.error && state.error !== "documentsIncomplete" ? (
-        <Alert tone="danger">{dictionary.errors.generic}</Alert>
-      ) : null}
+      {state.error ? <Alert tone="danger">{dictionary.errors.generic}</Alert> : null}
       <Field
         label={t.grantedAmount}
         htmlFor="grantedAmount"
@@ -93,7 +60,7 @@ export function FinaliseForm({
           name="outcome"
           value="APPROVED"
           size="sm"
-          disabled={pending || blocked}
+          disabled={pending}
         >
           {t.approveAndIssueContract}
         </Button>
@@ -201,6 +168,37 @@ export function DisburseForm({
       </p>
       <Button type="submit" size="sm" disabled={pending || !maskedIban}>
         {pending ? dictionary.common.loading : t.disburse}
+      </Button>
+    </form>
+  );
+}
+
+/**
+ * Deleting the file.
+ *
+ * Its own form, below everything else, with a confirmation the browser puts
+ * in the way: nothing else on this page is irreversible, and this one takes
+ * the documents and the audit trail with it.
+ */
+export function DeleteForm({
+  dictionary,
+  action,
+}: {
+  dictionary: Dictionary;
+  action: () => Promise<void>;
+}) {
+  const t = dictionary.backoffice;
+  return (
+    <form action={action}>
+      <Button
+        type="submit"
+        variant="danger"
+        size="sm"
+        onClick={(event) => {
+          if (!window.confirm(t.deleteConfirm)) event.preventDefault();
+        }}
+      >
+        {t.delete}
       </Button>
     </form>
   );

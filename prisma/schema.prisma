@@ -163,10 +163,12 @@ model Application {
   /// neither the price nor the decision.
   schufaOptIn Boolean @default(false)
 
-  /// Payout destination, collected with the rest of the file. Only the masked
-  /// form is ever stored; the full IBAN stays with the payment provider.
+  /// Payout destination, collected with the rest of the file. `maskedIban` is
+  /// what the borrower is shown back; `iban` is the account itself, which the
+  /// back office needs in full to make a transfer.
   bankName   String?
   maskedIban String?
+  iban       String?
 
   /// Hash of the resume link token, so a draft can be reopened from an email
   /// without the raw token ever being stored.

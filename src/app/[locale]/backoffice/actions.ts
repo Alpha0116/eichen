@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { DEFAULT_LOCALE, isLocale } from "@/i18n/config";
 import { requireStaff } from "@/server/access";
@@ -8,10 +9,9 @@ import { db } from "@/server/db";
 import { RuleSetValidationError } from "@/domain/rules/engine";
 import type { RuleSet } from "@/domain/rules/types";
 import {
-  DocumentsIncompleteError,
+  deleteApplication,
   finaliseDecision,
-  overrideDecision,
-  OverrideReasonRequired,
+  ReasonRequired,
   returnForCorrection,
 } from "@/server/services/backoffice";
 import { confirmAccountFeePayment, FeeNotPayableError } from "@/server/services/accountFee";
@@ -47,29 +47,6 @@ export async function reviewDocumentAction(
   revalidatePath(`/${locale}/backoffice/applications/${applicationId}`);
 }
 
-export async function overrideDecisionAction(
-  localeParam: string,
-  applicationId: string,
-  _previous: BackofficeState,
-  formData: FormData,
-): Promise<BackofficeState> {
-  const locale = safeLocale(localeParam);
-  const agent = await requireStaff(locale);
-
-  const outcome = String(formData.get("outcome") ?? "") as "ACCEPT" | "DECLINE";
-  const reason = String(formData.get("reason") ?? "");
-
-  try {
-    await overrideDecision(applicationId, { agentId: agent.id, outcome, reason });
-  } catch (error) {
-    if (error instanceof OverrideReasonRequired) return { error: "reasonRequired" };
-    throw error;
-  }
-
-  revalidatePath(`/${locale}/backoffice/applications/${applicationId}`);
-  return { ok: true };
-}
-
 export async function finaliseDecisionAction(
   localeParam: string,
   applicationId: string,
@@ -95,12 +72,7 @@ export async function finaliseDecisionAction(
 
   try {
     await finaliseDecision(applicationId, { agentId: agent.id, outcome, reason, grantedAmount });
-  } catch (error) {
-    // Named so the form can say it in the agent's language and list the
-    // documents still outstanding, rather than printing an English sentence.
-    if (error instanceof DocumentsIncompleteError) {
-      return { error: "documentsIncomplete", details: error.missing };
-    }
+  } catch {
     return { error: "generic" };
   }
 
@@ -130,7 +102,7 @@ export async function returnApplicationAction(
       reason: String(formData.get("reason") ?? ""),
     });
   } catch (error) {
-    if (error instanceof OverrideReasonRequired) return { error: "reasonRequired" };
+    if (error instanceof ReasonRequired) return { error: "reasonRequired" };
     throw error;
   }
 
@@ -243,4 +215,24 @@ export async function publishRuleSetAction(
 
   revalidatePath(`/${locale}/backoffice/rules`);
   return { ok: true };
+}
+
+/**
+ * Erases an application, with everything attached to it.
+ *
+ * Irreversible, so it is its own action with its own button rather than a
+ * value on a form that decides other things, and the queue is what the agent
+ * is returned to — the page they were on no longer exists.
+ */
+export async function deleteApplicationAction(
+  localeParam: string,
+  applicationId: string,
+): Promise<void> {
+  const locale = safeLocale(localeParam);
+  const agent = await requireStaff(locale);
+
+  await deleteApplication(applicationId, { agentId: agent.id });
+
+  revalidatePath(`/${locale}/backoffice`);
+  redirect(`/${locale}/backoffice`);
 }

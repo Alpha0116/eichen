@@ -1,25 +1,24 @@
 import { notFound } from "next/navigation";
 import { Alert, Badge, Button, Card, Figure, KeyValue, SectionHeading } from "@/components/ui";
-import { Timeline } from "@/components/Timeline";
 import type { ApplicationState } from "@/domain/application/states";
 import type { CurrencyCode } from "@/domain/finance/money";
 import { getDictionary, interpolate, type Locale } from "@/i18n";
 import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent } from "@/i18n/format";
 import { requireStaff } from "@/server/access";
-import { timelineFor, verifyApplicationChain } from "@/server/audit";
+import { verifyApplicationChain } from "@/server/audit";
 import { db } from "@/server/db";
 import { latestDecision, outstandingDocuments } from "@/server/services/backoffice";
 import { documentsFor, REJECTION_CODES } from "@/server/services/documents";
 import {
   confirmFeePaymentAction,
+  deleteApplicationAction,
   disburseAction,
   finaliseDecisionAction,
   returnApplicationAction,
-  overrideDecisionAction,
   reviewDocumentAction,
 } from "../../actions";
 import { accountFee } from "@/server/services/accountFee";
-import { ConfirmFeeForm, DisburseForm, FinaliseForm, OverrideForm, ReturnForm } from "./DecisionForms";
+import { ConfirmFeeForm, DeleteForm, DisburseForm, FinaliseForm, ReturnForm } from "./DecisionForms";
 
 const OUTCOME_TONE = { ACCEPT: "positive", REFER: "warning", DECLINE: "danger" } as const;
 
@@ -31,7 +30,7 @@ export default async function ApplicationDetailPage({
   const { locale, id } = await params;
   await requireStaff(locale);
 
-  const [application, decision, documents, entries, chain, outstanding, fee] = await Promise.all([
+  const [application, decision, documents, chain, outstanding, fee] = await Promise.all([
     db.application.findUnique({
       where: { id },
       include: {
@@ -46,7 +45,6 @@ export default async function ApplicationDetailPage({
     }),
     latestDecision(id),
     documentsFor(id),
-    timelineFor(id),
     verifyApplicationChain(id),
     outstandingDocuments(id),
     accountFee(id),
@@ -62,7 +60,7 @@ export default async function ApplicationDetailPage({
   const co = application.applicants.find((row) => row.role === "CO_BORROWER");
   const selected = application.offers.find((offer) => offer.selectedAt !== null);
   const reviewDoc = reviewDocumentAction.bind(null, locale, id);
-  const override = overrideDecisionAction.bind(null, locale, id);
+  const deleteThis = deleteApplicationAction.bind(null, locale, id);
   const finalise = finaliseDecisionAction.bind(null, locale, id);
   const disburseNow = disburseAction.bind(null, locale, id);
   const confirmFee = confirmFeePaymentAction.bind(null, locale, id);
@@ -90,45 +88,170 @@ export default async function ApplicationDetailPage({
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="space-y-3 p-5">
-          <SectionHeading title={t.tabs.overview} level={3} />
-          <KeyValue
-            rows={[
-              {
-                label: t.applicant,
-                value: primary ? `${primary.firstName} ${primary.lastName}` : "—",
-              },
-              { label: dictionary.funnel.profile.email, value: primary?.email ?? "—" },
-              {
-                label: dictionary.funnel.profile.birthDate,
-                value: primary?.birthDate ? formatDate(primary.birthDate, typedLocale) : "—",
-              },
-              {
-                label: dictionary.funnel.finances.employmentType,
-                value: primary
-                  ? dictionary.employment[primary.employmentType as keyof typeof dictionary.employment]
-                  : "—",
-              },
-              {
-                label: dictionary.funnel.finances.netIncome,
-                value: formatMoney(primary?.netMonthlyIncome ?? 0, typedLocale),
-              },
-              { label: t.amount, value: formatMoney(application.amount, typedLocale) },
-              {
-                label: dictionary.offers.term,
-                value: `${formatNumber(application.termMonths, typedLocale)} ${dictionary.common.months}`,
-              },
-              {
-                label: dictionary.simulator.purposeLabel,
-                value: dictionary.purpose[application.purpose as keyof typeof dictionary.purpose],
-              },
-              {
-                label: dictionary.funnel.profile.coBorrowerTitle,
-                value: co ? `${co.firstName} ${co.lastName}` : dictionary.common.no,
-              },
-            ]}
-          />
-        </Card>
+        <div className="space-y-6">
+          <Card className="space-y-3 p-5">
+            <SectionHeading title={t.tabs.overview} level={3} />
+            <KeyValue
+              rows={[
+                { label: t.reference, value: application.reference },
+                {
+                  label: t.applicant,
+                  value: primary ? `${primary.firstName} ${primary.lastName}` : "—",
+                },
+                {
+                  label: dictionary.funnel.profile.birthDate,
+                  value: primary?.birthDate ? formatDate(primary.birthDate, typedLocale) : "—",
+                },
+                { label: t.amount, value: formatMoney(application.amount, typedLocale) },
+                {
+                  label: t.grantedAmount,
+                  value: formatMoney(application.grantedAmount ?? application.amount, typedLocale),
+                },
+                {
+                  label: dictionary.offers.term,
+                  value: `${formatNumber(application.termMonths, typedLocale)} ${dictionary.common.months}`,
+                },
+                {
+                  label: dictionary.simulator.purposeLabel,
+                  value: dictionary.purpose[application.purpose as keyof typeof dictionary.purpose],
+                },
+                { label: t.createdAt, value: formatDateTime(application.createdAt, typedLocale) },
+                { label: t.schufaRequested, value: application.schufaOptIn ? dictionary.common.yes : dictionary.common.no },
+              ]}
+            />
+          </Card>
+
+          <Card className="space-y-3 p-5">
+            <SectionHeading title={t.contactTitle} level={3} />
+            <KeyValue
+              rows={[
+                { label: dictionary.funnel.profile.email, value: primary?.email ?? "—" },
+                { label: dictionary.funnel.profile.phone, value: primary?.phone ?? "—" },
+                { label: dictionary.funnel.profile.street, value: primary?.street ?? "—" },
+                {
+                  label: dictionary.funnel.profile.city,
+                  value: primary ? `${primary.postalCode} ${primary.city}` : "—",
+                },
+                { label: dictionary.funnel.profile.country, value: primary?.country ?? "—" },
+                {
+                  label: dictionary.funnel.profile.residentSince,
+                  value: formatNumber(primary?.residentSinceMonths ?? 0, typedLocale),
+                },
+              ]}
+            />
+          </Card>
+
+          <Card className="space-y-3 p-5">
+            <SectionHeading title={t.employmentTitle} level={3} />
+            <KeyValue
+              rows={[
+                {
+                  label: dictionary.funnel.finances.employmentType,
+                  value: primary
+                    ? dictionary.employment[primary.employmentType as keyof typeof dictionary.employment]
+                    : "—",
+                },
+                { label: dictionary.funnel.finances.employer, value: primary?.employerName || "—" },
+                {
+                  label: dictionary.funnel.finances.employedSince,
+                  value: formatNumber(primary?.employedSinceMonths ?? 0, typedLocale),
+                },
+                {
+                  label: dictionary.funnel.finances.employmentEndsOn,
+                  value: primary?.employmentEndsOn
+                    ? formatDate(primary.employmentEndsOn, typedLocale)
+                    : "—",
+                },
+                {
+                  label: dictionary.funnel.finances.netIncome,
+                  value: formatMoney(primary?.netMonthlyIncome ?? 0, typedLocale),
+                },
+                {
+                  label: dictionary.funnel.finances.otherIncome,
+                  value: formatMoney(primary?.otherMonthlyIncome ?? 0, typedLocale),
+                },
+              ]}
+            />
+          </Card>
+
+          <Card className="space-y-3 p-5">
+            <SectionHeading title={t.householdTitle} level={3} />
+            <KeyValue
+              rows={[
+                {
+                  label: dictionary.funnel.finances.adults,
+                  value: formatNumber(application.household?.adults ?? 0, typedLocale),
+                },
+                {
+                  label: dictionary.funnel.finances.children,
+                  value: formatNumber(application.household?.children ?? 0, typedLocale),
+                },
+                {
+                  label: dictionary.funnel.finances.housingStatus,
+                  value: application.household
+                    ? dictionary.housing[application.household.housingStatus as keyof typeof dictionary.housing]
+                    : "—",
+                },
+                {
+                  label: dictionary.funnel.finances.housingCost,
+                  value: formatMoney(application.household?.monthlyHousingCost ?? 0, typedLocale),
+                },
+                {
+                  label: dictionary.funnel.finances.existingInstalments,
+                  value: formatMoney(application.household?.existingLoanInstalments ?? 0, typedLocale),
+                },
+                {
+                  label: dictionary.funnel.finances.otherCosts,
+                  value: formatMoney(application.household?.otherFixedCosts ?? 0, typedLocale),
+                },
+              ]}
+            />
+          </Card>
+
+          {/* The account the payout goes to, in full: this desk is where the
+              transfer is made from, and half an IBAN cannot be transferred to. */}
+          <Card className="space-y-3 p-5">
+            <SectionHeading title={t.bankTitle} level={3} />
+            <KeyValue
+              rows={[
+                { label: dictionary.funnel.bank.bankName, value: application.bankName ?? "—" },
+                {
+                  label: t.ibanFull,
+                  value: application.iban ? (
+                    <span className="select-all break-all">{application.iban}</span>
+                  ) : (
+                    (application.maskedIban ?? t.ibanMissing)
+                  ),
+                },
+              ]}
+            />
+          </Card>
+
+          {co ? (
+            <Card className="space-y-3 p-5">
+              <SectionHeading title={t.coBorrowerTitle} level={3} />
+              <KeyValue
+                rows={[
+                  { label: t.applicant, value: `${co.firstName} ${co.lastName}` },
+                  {
+                    label: dictionary.funnel.profile.birthDate,
+                    value: co.birthDate ? formatDate(co.birthDate, typedLocale) : "—",
+                  },
+                  { label: dictionary.funnel.profile.email, value: co.email || "—" },
+                  { label: dictionary.funnel.profile.phone, value: co.phone || "—" },
+                  {
+                    label: dictionary.funnel.finances.employmentType,
+                    value: dictionary.employment[co.employmentType as keyof typeof dictionary.employment],
+                  },
+                  {
+                    label: dictionary.funnel.finances.netIncome,
+                    value: formatMoney(co.netMonthlyIncome, typedLocale),
+                  },
+                ]}
+              />
+            </Card>
+          ) : null}
+        </div>
 
         <Card className="space-y-4 p-5">
           <SectionHeading title={t.decisionTitle} level={3} />
@@ -163,24 +286,6 @@ export default async function ApplicationDetailPage({
                   ))}
                 </ul>
               </div>
-
-              {decision.overriddenAt ? (
-                <Alert tone="warning">
-                  {interpolate(t.overrideDone, {
-                    agent: decision.overriddenBy ?? "",
-                    date: formatDateTime(decision.overriddenAt, typedLocale),
-                  })}
-                  : {decision.overrideOutcome === "ACCEPT" || decision.overrideOutcome === "DECLINE"
-                    ? t.outcome[decision.overrideOutcome]
-                    : decision.overrideOutcome}{" "}
-                  — {decision.overrideReason}
-                </Alert>
-              ) : (
-                <div className="border-t border-[var(--border)] pt-3">
-                  <h4 className="mb-2 text-sm font-semibold">{t.overrideTitle}</h4>
-                  <OverrideForm dictionary={dictionary} action={override} />
-                </div>
-              )}
 
               <details className="text-sm">
                 <summary className="cursor-pointer font-medium">{t.factsTitle}</summary>
@@ -221,6 +326,23 @@ export default async function ApplicationDetailPage({
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <a
+                    href={`/api/documents/${document.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm underline underline-offset-2"
+                  >
+                    {t.openDocument}
+                  </a>
+                  {/* The same bytes, saved rather than looked at: a scan that
+                      has to be forwarded or filed is not read in a tab. */}
+                  <a
+                    href={`/api/documents/${document.id}?download=1`}
+                    download={document.filename}
+                    className="text-sm underline underline-offset-2"
+                  >
+                    {dictionary.common.download}
+                  </a>
                   <Badge
                     tone={
                       document.status === "VALIDATED"
@@ -348,10 +470,11 @@ export default async function ApplicationDetailPage({
         </Card>
       </div>
 
-      <Card className="space-y-4 p-5">
-        <SectionHeading title={t.tabs.timeline} level={3} />
-        <Timeline entries={entries} locale={typedLocale} emptyLabel={t.timelineEmpty} />
+      <Card className="space-y-3 border-[var(--danger,#b3261e)]/40 p-5">
+        <SectionHeading title={t.deleteTitle} description={t.deleteIntro} level={3} />
+        <DeleteForm dictionary={dictionary} action={deleteThis} />
       </Card>
+
     </div>
   );
 }

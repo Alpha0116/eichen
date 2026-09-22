@@ -35,6 +35,7 @@ export const AUDIT_ACTIONS = [
   "data_export_requested",
   "state_changed",
   "admin_account_created",
+  "application_deleted",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

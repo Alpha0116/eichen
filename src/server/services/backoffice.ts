@@ -9,6 +9,7 @@ import { transition } from "./application";
 import { generateContract } from "./contract";
 import { documentsFor, requiredDocuments } from "./documents";
 import { notify } from "./notifications";
+import { deleteStored } from "../storage";
 import type { Locale } from "../../i18n";
 
 /**
@@ -193,74 +194,22 @@ export async function latestDecision(applicationId: string): Promise<DecisionVie
  * agent's own language, and it names what is missing instead of stating that
  * something is.
  */
-export class DocumentsIncompleteError extends Error {
-  constructor(public readonly missing: string[]) {
-    super(`Cannot approve: outstanding documents ${missing.join(", ")}`);
-    this.name = "DocumentsIncompleteError";
-  }
-}
-
-export class OverrideReasonRequired extends Error {
+export class ReasonRequired extends Error {
   constructor() {
-    super("An override must state a reason");
-    this.name = "OverrideReasonRequired";
+    super("A send-back must state what to correct");
+    this.name = "ReasonRequired";
   }
-}
-
-/**
- * Human override of an automated decision.
- *
- * The reason is mandatory and stored on the decision record, not just in the
- * audit trail: a borrower entitled to an explanation of why a machine's answer
- * was changed has to be able to get one from the decision itself.
- */
-export async function overrideDecision(
-  applicationId: string,
-  input: { agentId: string; outcome: "ACCEPT" | "DECLINE"; reason: string },
-) {
-  const reason = input.reason.trim();
-  if (reason.length < 10) throw new OverrideReasonRequired();
-
-  const decision = await db.decisionRecord.findFirstOrThrow({
-    where: { applicationId },
-    orderBy: { createdAt: "desc" },
-  });
-
-  await db.decisionRecord.update({
-    where: { id: decision.id },
-    data: {
-      overriddenBy: input.agentId,
-      overrideOutcome: input.outcome,
-      overrideReason: reason,
-      overriddenAt: new Date(),
-    },
-  });
-
-  await recordAudit({
-    applicationId,
-    action: "decision_overridden",
-    actorType: "AGENT",
-    actorId: input.agentId,
-    payload: {
-      decisionId: decision.id,
-      automatedOutcome: decision.outcome,
-      overrideOutcome: input.outcome,
-      reason,
-    },
-  });
-
-  return decision;
 }
 
 /**
  * The decision. This is the only place an application is approved or refused,
  * and only an administrator can call it.
  *
- * Approval refuses while a required document is outstanding: an approval
- * granted on an incomplete file is exactly the kind of thing an audit is meant
- * to catch, so the code does not allow it in the first place. It also
- * generates the contract in the same call — an approved application with no
- * contract is a dead end for the borrower, who has no way to make one appear.
+ * Nothing gates it: which documents are in and whether they are any good is
+ * what the administrator is looking at when they press the button, and the
+ * file records what was outstanding at the time. It generates the contract in
+ * the same call — an approved application with no contract is a dead end for
+ * the borrower, who has no way to make one appear.
  *
  * `grantedAmount` lets an administrator approve for less than was asked. The
  * contract is generated from the offer, so cutting the amount reprices it.
@@ -274,11 +223,6 @@ export async function finaliseDecision(
     grantedAmount?: number | null;
   },
 ) {
-  if (input.outcome === "APPROVED") {
-    const missing = await outstandingDocuments(applicationId);
-    if (missing.length > 0) throw new DocumentsIncompleteError(missing);
-  }
-
   await transition(applicationId, input.outcome, "AGENT", {
     actorId: input.agentId,
     reason: input.reason,
@@ -332,7 +276,7 @@ export async function returnForCorrection(
   input: { agentId: string; reason: string },
 ) {
   const reason = input.reason.trim();
-  if (reason.length < 10) throw new OverrideReasonRequired();
+  if (reason.length < 10) throw new ReasonRequired();
 
   await transition(applicationId, "DRAFT", "AGENT", { actorId: input.agentId, reason });
 
@@ -359,4 +303,68 @@ export async function returnForCorrection(
       variables: { reference: application.reference },
     });
   }
+}
+
+/**
+ * Erases an application and everything that hangs off it.
+ *
+ * A real deletion, not a flag: the file, its applicants, household, consents,
+ * offers, documents, contracts, decisions, notifications, its loan and that
+ * loan's instalments and payments, and the audit trail of the whole thing.
+ * Nothing is left to find, which is the point — this is the tool for a test
+ * file, a duplicate, or an erasure the borrower asked for.
+ *
+ * The stored bytes go too, by key, because a document row disappearing while
+ * a scan of somebody's passport stays in the store is the opposite of what
+ * pressing delete means. Loans, audit entries and stored files are removed by
+ * hand: the first two do not cascade on purpose, and the third is not in this
+ * database at all when a blob store is connected.
+ */
+export async function deleteApplication(
+  applicationId: string,
+  input: { agentId: string },
+): Promise<{ reference: string }> {
+  const application = await db.application.findUniqueOrThrow({
+    where: { id: applicationId },
+    select: {
+      reference: true,
+      documents: { select: { storageKey: true } },
+      contracts: {
+        select: { storageKey: true, preContractualStorageKey: true, signatureStorageKey: true, signedStorageKey: true },
+      },
+      loan: { select: { id: true } },
+    },
+  });
+
+  const keys = [
+    ...application.documents.map((row) => row.storageKey),
+    ...application.contracts.flatMap((row) => [
+      row.storageKey,
+      row.preContractualStorageKey,
+      row.signatureStorageKey,
+      row.signedStorageKey,
+    ]),
+  ].filter((key): key is string => Boolean(key));
+
+  await db.$transaction(async (tx) => {
+    if (application.loan) await tx.loan.delete({ where: { id: application.loan.id } });
+    await tx.auditEntry.deleteMany({ where: { applicationId } });
+    await tx.application.delete({ where: { id: applicationId } });
+  });
+
+  // After the row is gone, so a failure here leaves an orphaned blob rather
+  // than a file whose paperwork was destroyed but whose scans were not.
+  await Promise.all(keys.map((key) => deleteStored(key)));
+
+  // Not against the application — there is none any more — but the act itself
+  // is recorded, with who did it and what is gone.
+  await recordAudit({
+    applicationId: null,
+    action: "application_deleted",
+    actorType: "AGENT",
+    actorId: input.agentId,
+    payload: { reference: application.reference, files: keys.length },
+  });
+
+  return { reference: application.reference };
 }

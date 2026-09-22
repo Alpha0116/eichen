@@ -20,7 +20,7 @@ import {
   payAccountFee,
 } from "@/server/services/accountFee";
 import { clampAmount, clampTerm } from "@/server/services/simulation";
-import { maskIban } from "@/server/services/iban";
+import { maskIban, normaliseIban } from "@/server/services/iban";
 
 export type ActionState = { error?: string; field?: string; ok?: boolean };
 
@@ -233,7 +233,7 @@ export async function saveProfileAction(
     });
     await tx.application.update({
       where: { id: applicationId },
-      data: { bankName: data.bankName, maskedIban: masked },
+      data: { bankName: data.bankName, maskedIban: masked, iban: normaliseIban(data.iban) },
     });
 
     // Unticking the box removes the second borrower rather than leaving a

@@ -1,4 +1,4 @@
-import { BlobNotFoundError, get as getBlob, put as putBlob } from "@vercel/blob";
+import { BlobNotFoundError, del as delBlob, get as getBlob, put as putBlob } from "@vercel/blob";
 import { db } from "./db";
 
 /**
@@ -39,6 +39,25 @@ export async function writeStored(key: string, bytes: Buffer): Promise<void> {
   const bytesCopy = new Uint8Array(bytes.byteLength);
   bytesCopy.set(bytes);
   await db.storedFile.create({ data: { key, bytes: bytesCopy, sizeBytes: bytes.byteLength } });
+}
+
+/**
+ * Removes a stored file, if it is still there.
+ *
+ * A key that no longer exists is not an error: this is called when the row
+ * that named it is already gone, and a delete that fails because the work is
+ * already done would leave the caller nothing sensible to do.
+ */
+export async function deleteStored(key: string): Promise<void> {
+  if (BLOB_TOKEN) {
+    try {
+      await delBlob(key, { token: BLOB_TOKEN });
+    } catch (error) {
+      if (!(error instanceof BlobNotFoundError)) throw error;
+    }
+    return;
+  }
+  await db.storedFile.deleteMany({ where: { key } });
 }
 
 export async function readStoredBytes(key: string): Promise<Buffer> {
