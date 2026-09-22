@@ -438,7 +438,8 @@ model Document {
   filename      String
   mimeType      String
   sizeBytes     Int
-  /// Key in the encrypted object store. The bytes never live in this database.
+  /// Key the bytes are stored under: a StoredFile row, or a private blob when
+  /// a Vercel Blob store is connected. Never a path on disk.
   storageKey    String
   sha256        String
   /// RECEIVED | READABLE | VALIDATED | REJECTED
@@ -454,6 +455,20 @@ model Document {
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, status])
+}
+
+/// The bytes of an uploaded document or a generated contract, keyed the way
+/// the Document and Contract rows refer to them (`<applicationId>/<name>`).
+///
+/// The store of last resort: it needs nothing beyond the database the site
+/// already has, which is what makes a deploy self-sufficient. A connected
+/// Vercel Blob store takes precedence, and this table then stays empty.
+/// Written once per key, never updated.
+model StoredFile {
+  key       String   @id
+  bytes     Bytes
+  sizeBytes Int
+  createdAt DateTime @default(now())
 }
 
 model IdentityCheck {

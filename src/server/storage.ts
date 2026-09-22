@@ -1,6 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
 import { BlobNotFoundError, get as getBlob, put as putBlob } from "@vercel/blob";
+import { db } from "./db";
 
 /**
  * Where uploaded documents and generated contracts live.
@@ -8,36 +7,20 @@ import { BlobNotFoundError, get as getBlob, put as putBlob } from "@vercel/blob"
  * Two backends behind one pair of functions, chosen once from the environment:
  *
  * - With `BLOB_READ_WRITE_TOKEN` set, files go to Vercel Blob as private
- *   blobs. This is the production case: a serverless function has no
- *   writable, persistent disk, and a file written there is gone at the next
- *   invocation, let alone the next deploy. Private access means a blob is
- *   only ever read back through this module, never by URL.
- * - Otherwise, the local disk under `DOCUMENT_STORAGE_DIR` (default
- *   `.storage/documents` beside the checkout), which is what a laptop wants.
+ *   blobs, only ever read back through this module and never by URL.
+ * - Otherwise, the `StoredFile` table of the database the site already has.
+ *   That is the default because it needs nothing configured: a deploy with a
+ *   database is a deploy that can take documents. A serverless function has no
+ *   writable, persistent disk, so a file written beside the code was never an
+ *   option in production, and the table is what makes a fresh deploy work
+ *   without anyone touching the hosting account.
  *
  * Either way a stored key is a plain relative path, `<applicationId>/<name>`,
  * and the rows in the database hold only that key — switching backend does
- * not touch them.
+ * not touch them. A key is written once and never replaced.
  */
 
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
-
-export const DOCUMENT_STORAGE_ROOT = resolve(
-  process.env.DOCUMENT_STORAGE_DIR ?? "./.storage/documents",
-);
-
-export class StorageNotWritableError extends Error {
-  constructor(root: string, cause: unknown) {
-    super(
-      `Document storage at ${root} is not writable. ` +
-        (process.env.DOCUMENT_STORAGE_DIR
-          ? "Check that DOCUMENT_STORAGE_DIR exists and the process may write to it."
-          : "Neither BLOB_READ_WRITE_TOKEN nor DOCUMENT_STORAGE_DIR is set, so the working directory was used; connect a Vercel Blob store or point DOCUMENT_STORAGE_DIR at a persistent, writable directory."),
-      { cause },
-    );
-    this.name = "StorageNotWritableError";
-  }
-}
 
 export class StoredFileNotFoundError extends Error {
   constructor(key: string) {
@@ -46,24 +29,16 @@ export class StoredFileNotFoundError extends Error {
   }
 }
 
-/** Writes bytes under a storage key. A key is written once and never replaced. */
 export async function writeStored(key: string, bytes: Buffer): Promise<void> {
   if (BLOB_TOKEN) {
-    await putBlob(key, bytes, {
-      access: "private",
-      addRandomSuffix: false,
-      token: BLOB_TOKEN,
-    });
+    await putBlob(key, bytes, { access: "private", addRandomSuffix: false, token: BLOB_TOKEN });
     return;
   }
-
-  const absolute = join(DOCUMENT_STORAGE_ROOT, key);
-  try {
-    await mkdir(dirname(absolute), { recursive: true });
-  } catch (error) {
-    throw new StorageNotWritableError(DOCUMENT_STORAGE_ROOT, error);
-  }
-  await writeFile(absolute, bytes, { mode: 0o600 });
+  // Prisma's Bytes wants a Uint8Array over a plain ArrayBuffer; a Buffer may
+  // sit on a shared one, so the bytes are copied into one that is not.
+  const bytesCopy = new Uint8Array(bytes.byteLength);
+  bytesCopy.set(bytes);
+  await db.storedFile.create({ data: { key, bytes: bytesCopy, sizeBytes: bytes.byteLength } });
 }
 
 export async function readStoredBytes(key: string): Promise<Buffer> {
@@ -79,12 +54,9 @@ export async function readStoredBytes(key: string): Promise<Buffer> {
     return Buffer.from(await new Response(result.stream).arrayBuffer());
   }
 
-  try {
-    return await readFile(join(DOCUMENT_STORAGE_ROOT, key));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new StoredFileNotFoundError(key);
-    throw error;
-  }
+  const row = await db.storedFile.findUnique({ where: { key }, select: { bytes: true } });
+  if (!row) throw new StoredFileNotFoundError(key);
+  return Buffer.from(row.bytes);
 }
 
 export async function readStoredText(key: string): Promise<string> {
