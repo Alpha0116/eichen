@@ -21,7 +21,7 @@ export default function robots(): MetadataRoute.Robots {
         "/*/backoffice/",
         "/*/login",
         "/*/register",
-        "/*/admin-setup",
+        "/*/ads",
         "/*/mfa",
       ],
     },
