@@ -12,6 +12,7 @@ import {
   type ContractData,
   type Row,
 } from "./contractDocument";
+import { CONTRACT_LOGO_PNG, CONTRACT_LOGO_RATIO } from "./contractLogo";
 
 /**
  * Typesetting for the credit agreement and the information sheet.
@@ -27,7 +28,9 @@ import {
  */
 
 const PAGE = { width: 595.28, height: 841.89 } as const;
-const MARGIN = { top: 64, bottom: 62, left: 56, right: 56 } as const;
+const MARGIN = { top: 82, bottom: 62, left: 56, right: 56 } as const;
+/** The logo at the head of every page, above the top margin. */
+const LETTERHEAD = { height: 26, top: 30 } as const;
 const CONTENT_WIDTH = PAGE.width - MARGIN.left - MARGIN.right;
 
 const INK = rgb(0.071, 0.063, 0.227);
@@ -85,6 +88,11 @@ interface Fonts {
   bold: PDFFont;
 }
 
+/** What a page needs embedded in the document before anything is drawn. */
+interface Assets extends Fonts {
+  logo: PDFImage;
+}
+
 /**
  * A cursor that walks down the page and starts a new one when it runs out.
  *
@@ -98,7 +106,7 @@ class Writer {
 
   constructor(
     private readonly doc: PDFDocument,
-    private readonly fonts: Fonts,
+    private readonly fonts: Assets,
     private readonly footerNote: string,
   ) {
     // Continues the numbering of whatever the document already holds, so the
@@ -111,6 +119,15 @@ class Writer {
   private begin(): PDFPage {
     const page = this.doc.addPage([PAGE.width, PAGE.height]);
     this.pageNumber += 1;
+    // The logo heads every page, not only the first: a page of the schedule
+    // printed on its own still says whose contract it belongs to.
+    const logoWidth = LETTERHEAD.height * CONTRACT_LOGO_RATIO;
+    page.drawImage(this.fonts.logo, {
+      x: MARGIN.left,
+      y: PAGE.height - LETTERHEAD.top - LETTERHEAD.height,
+      width: logoWidth,
+      height: LETTERHEAD.height,
+    });
     page.drawLine({
       start: { x: MARGIN.left, y: MARGIN.bottom - 14 },
       end: { x: PAGE.width - MARGIN.right, y: MARGIN.bottom - 14 },
@@ -383,12 +400,13 @@ class Writer {
   }
 }
 
-async function fontsOf(doc: PDFDocument): Promise<Fonts> {
-  const [regular, bold] = await Promise.all([
+async function assetsOf(doc: PDFDocument): Promise<Assets> {
+  const [regular, bold, logo] = await Promise.all([
     doc.embedFont(StandardFonts.Helvetica),
     doc.embedFont(StandardFonts.HelveticaBold),
+    doc.embedPng(CONTRACT_LOGO_PNG),
   ]);
-  return { regular, bold };
+  return { regular, bold, logo };
 }
 
 function describe(doc: PDFDocument, data: ContractData, title: string) {
@@ -405,7 +423,7 @@ function describe(doc: PDFDocument, data: ContractData, title: string) {
 export async function renderContractPdf(data: ContractData): Promise<Buffer> {
   const text = TEXT[data.locale];
   const doc = await PDFDocument.create();
-  const fonts = await fontsOf(doc);
+  const fonts = await assetsOf(doc);
   describe(doc, data, text.contractTitle);
 
   const writer = new Writer(doc, fonts, `${text.contractTitle} - ${data.reference}`);
@@ -460,7 +478,7 @@ export async function renderContractPdf(data: ContractData): Promise<Buffer> {
 export async function renderEsisPdf(data: ContractData): Promise<Buffer> {
   const text = TEXT[data.locale];
   const doc = await PDFDocument.create();
-  const fonts = await fontsOf(doc);
+  const fonts = await assetsOf(doc);
   describe(doc, data, text.esisTitle);
 
   const writer = new Writer(doc, fonts, `${text.esisTitle} - ${data.reference}`);
@@ -517,7 +535,7 @@ export async function appendSignaturePage(
   locale: Locale,
 ): Promise<Buffer> {
   const doc = await PDFDocument.load(contractPdf);
-  const fonts = await fontsOf(doc);
+  const fonts = await assetsOf(doc);
   const labels = SIGNATURE_TEXT[locale];
   const text = TEXT[locale];
 
