@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { CardPayment } from "@/adapters/ports";
 import { CONSENTS_REQUIRED_BY_STAGE } from "@/domain/compliance/consents";
-import { isEditable, type ApplicationState } from "@/domain/application/states";
+import { funnelStep, isEditable, type ApplicationState } from "@/domain/application/states";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/i18n/config";
 import { requireApplicationAccess } from "@/server/access";
 import { recordAudit } from "@/server/audit";
@@ -21,6 +21,7 @@ import {
 } from "@/server/services/accountFee";
 import { clampAmount, clampTerm } from "@/server/services/simulation";
 import { maskIban, normaliseIban } from "@/server/services/iban";
+import { requestTransfer } from "@/server/services/accountSpace";
 
 export type ActionState = { error?: string; field?: string; ok?: boolean };
 
@@ -535,4 +536,35 @@ export async function payAccountFeeAction(
   }
 
   redirect(`/${safeLocale}/apply/${applicationId}/processing`);
+}
+
+/**
+ * Moves the granted amount out of the account space, against the code the
+ * borrower got from support. A match records the request and nothing more;
+ * the payout itself stays with the back office.
+ */
+export async function requestTransferAction(
+  localeParam: string,
+  applicationId: string,
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const access = await requireApplicationAccess(applicationId);
+  const safeLocale = locale(localeParam);
+
+  const { state } = await db.application.findUniqueOrThrow({
+    where: { id: applicationId },
+    select: { state: true },
+  });
+  if (funnelStep(state as ApplicationState) < 5) return { error: "generic" };
+
+  const code = String(formData.get("code") ?? "").trim();
+  if (!/^\d{6}$/.test(code.replace(/\s/g, ""))) return { error: "transferCodeInvalid", field: "code" };
+
+  const outcome = await requestTransfer(applicationId, { code, userId: access.user?.id ?? null });
+  if (outcome === "INVALID") return { error: "transferCodeInvalid", field: "code" };
+  if (outcome === "LOCKED") return { error: "transferCodeLocked" };
+
+  revalidatePath(`/${safeLocale}/apply/${applicationId}/processing`);
+  return { ok: true };
 }

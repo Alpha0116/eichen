@@ -18,6 +18,7 @@ import { confirmAccountFeePayment, FeeNotPayableError } from "@/server/services/
 import { reviewDocument, type RejectionCode } from "@/server/services/documents";
 import { publishRuleSet } from "@/server/services/rules";
 import { disburse } from "@/server/services/servicing";
+import { resetTransferAttempts, saveAccountSpaceDetails } from "@/server/services/accountSpace";
 
 export type BackofficeState = { error?: string; ok?: boolean; details?: string[] };
 
@@ -235,4 +236,49 @@ export async function deleteApplicationAction(
 
   revalidatePath(`/${locale}/backoffice`);
   redirect(`/${locale}/backoffice`);
+}
+
+const accountSpaceSchema = z.object({
+  bankName: z.string().trim().min(1).max(80),
+  accountHolder: z.string().trim().max(80),
+  iban: z.string().trim().min(1).max(42),
+  bic: z.string().trim().min(1).max(11),
+  cardNumber: z.string().trim().regex(/^[\d ]{12,23}$/),
+  cardExpiry: z.string().trim().regex(/^(0[1-9]|1[0-2])\/\d{2}$/),
+});
+
+/**
+ * Saves the bank details every borrower sees on their account space.
+ *
+ * Checked for shape only. These are what an administrator chose to show,
+ * not an account anything is paid into from here, so there is nothing to
+ * verify them against.
+ */
+export async function saveAccountSpaceAction(
+  localeParam: string,
+  _previous: BackofficeState,
+  formData: FormData,
+): Promise<BackofficeState> {
+  const locale = safeLocale(localeParam);
+  const agent = await requireStaff(locale);
+
+  const parsed = accountSpaceSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "validation" };
+
+  await saveAccountSpaceDetails(parsed.data, { agentId: agent.id });
+
+  revalidatePath(`/${locale}/backoffice`);
+  return { ok: true };
+}
+
+export async function resetTransferAttemptsAction(
+  localeParam: string,
+  applicationId: string,
+): Promise<void> {
+  const locale = safeLocale(localeParam);
+  const agent = await requireStaff(locale);
+
+  await resetTransferAttempts(applicationId, { agentId: agent.id });
+
+  revalidatePath(`/${locale}/backoffice/applications/${applicationId}`);
 }

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Alert, Badge, Button, Card, Figure, KeyValue, SectionHeading } from "@/components/ui";
-import type { ApplicationState } from "@/domain/application/states";
+import { funnelStep, type ApplicationState } from "@/domain/application/states";
 import type { CurrencyCode } from "@/domain/finance/money";
 import { getDictionary, interpolate, type Locale } from "@/i18n";
 import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent } from "@/i18n/format";
@@ -15,9 +15,11 @@ import {
   disburseAction,
   finaliseDecisionAction,
   returnApplicationAction,
+  resetTransferAttemptsAction,
   reviewDocumentAction,
 } from "../../actions";
 import { accountFee } from "@/server/services/accountFee";
+import { transferCodeFor, TRANSFER_CODE_MAX_ATTEMPTS } from "@/server/services/accountSpace";
 import { ConfirmFeeForm, DeleteForm, DisburseForm, FinaliseForm, ReturnForm } from "./DecisionForms";
 
 const OUTCOME_TONE = { ACCEPT: "positive", REFER: "warning", DECLINE: "danger" } as const;
@@ -66,6 +68,10 @@ export default async function ApplicationDetailPage({
   const confirmFee = confirmFeePaymentAction.bind(null, locale, id);
   const returnToCustomer = returnApplicationAction.bind(null, locale, id);
   const reasonText = dictionary.reason as unknown as Record<string, string>;
+  // Only once the borrower has an account space to transfer from; before
+  // that there is nothing a code could release.
+  const transferCode = funnelStep(state) >= 5 ? await transferCodeFor(id) : null;
+  const transferLocked = application.transferCodeAttempts >= TRANSFER_CODE_MAX_ATTEMPTS;
 
   return (
     <div className="space-y-6">
@@ -469,6 +475,40 @@ export default async function ApplicationDetailPage({
           ) : null}
         </Card>
       </div>
+
+      {transferCode ? (
+        <Card className="space-y-3 p-5">
+          <SectionHeading title={t.transferTitle} description={t.transferCodeIntro} level={3} />
+          <p className="text-sm">
+            <span className="text-[var(--muted)]">{t.transferCode}</span>{" "}
+            <span className="tabular text-lg font-semibold tracking-[0.2em]">{transferCode}</span>
+          </p>
+          <p className="text-sm">
+            {application.transferRequestedAt
+              ? interpolate(t.transferRequested, {
+                  date: formatDateTime(application.transferRequestedAt, typedLocale),
+                })
+              : t.transferNotRequested}
+          </p>
+          {application.transferCodeAttempts > 0 && !application.transferRequestedAt ? (
+            <p className={`text-sm ${transferLocked ? "font-medium text-[var(--danger)]" : "text-[var(--muted)]"}`}>
+              {transferLocked
+                ? t.transferLocked
+                : interpolate(t.transferAttempts, {
+                    count: application.transferCodeAttempts,
+                    max: TRANSFER_CODE_MAX_ATTEMPTS,
+                  })}
+            </p>
+          ) : null}
+          {transferLocked && !application.transferRequestedAt ? (
+            <form action={resetTransferAttemptsAction.bind(null, locale, id)}>
+              <Button type="submit" size="sm" variant="secondary">
+                {t.transferReset}
+              </Button>
+            </form>
+          ) : null}
+        </Card>
+      ) : null}
 
       <Card className="space-y-3 border-[var(--danger,#b3261e)]/40 p-5">
         <SectionHeading title={t.deleteTitle} description={t.deleteIntro} level={3} />

@@ -170,6 +170,13 @@ model Application {
   maskedIban String?
   iban       String?
 
+  /// Code the borrower types to move the granted amount out of the account
+  /// space on step 5. Stored readable, because it is handed out by support on
+  /// request rather than sent automatically; generated on first use.
+  transferCode         String?
+  transferCodeAttempts Int       @default(0)
+  transferRequestedAt  DateTime?
+
   /// Hash of the resume link token, so a draft can be reopened from an email
   /// without the raw token ever being stored.
   resumeTokenHash String?   @unique
@@ -568,6 +575,22 @@ model AccountFee {
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([status])
+}
+
+/// The bank details shown on the borrower's account space on step 5, set by
+/// an administrator in the back office. One row, keyed "default"; until it is
+/// saved the defaults in src/server/services/accountSpace.ts are shown.
+model AccountSpaceSettings {
+  id            String   @id @default("default")
+  bankName      String
+  /// Blank means the borrower's own name is printed on the card.
+  accountHolder String
+  iban          String
+  bic           String
+  cardNumber    String
+  cardExpiry    String
+  updatedAt     DateTime @updatedAt
+  updatedBy     String?
 }
 
 // --- Servicing --------------------------------------------------------------

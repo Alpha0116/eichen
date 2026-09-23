@@ -36,6 +36,9 @@ export const AUDIT_ACTIONS = [
   "state_changed",
   "admin_account_created",
   "application_deleted",
+  "transfer_requested",
+  "account_space_updated",
+  "transfer_attempts_reset",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
