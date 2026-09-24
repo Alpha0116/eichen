@@ -1214,8 +1214,6 @@ Unterschrift     {signatureHash}`,
     transferBank: "Bank",
     transferAmount: "Betrag",
     transferPurpose: "Verwendungszweck",
-    transferPurposeNote:
-      "Geben Sie bei der Überweisung unbedingt {reference} als Verwendungszweck an — nur so können wir Ihre Zahlung Ihrem Antrag zuordnen.",
     transferQuestions: "Fragen zur Zahlung? Schreiben Sie uns.",
     cardTitle: "Mit Karte bezahlen",
     cardIntro:

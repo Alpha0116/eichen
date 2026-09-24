@@ -109,9 +109,6 @@ export default async function FeePage({
               { label: t.transferPurpose, value: fee.reference },
             ]}
           />
-          <Alert variant="outline" tone="accent">
-            <p>{interpolate(t.transferPurposeNote, { reference: fee.reference })}</p>
-          </Alert>
           <p className="text-sm leading-relaxed text-[var(--muted)]">{t.transferQuestions}</p>
           <ContactButtons dictionary={dictionary} reference={application.reference} size="sm" />
         </Card>
