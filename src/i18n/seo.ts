@@ -18,7 +18,7 @@ import { DEFAULT_LOCALE, getDictionary, INTL_LOCALES, LOCALES, type Locale } fro
  * deployment on another domain needs one environment variable rather than a
  * search through the codebase.
  */
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://eichen-kredit.com").replace(
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.eichen-kredit.com").replace(
   /\/+$/,
   "",
 );
