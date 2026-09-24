@@ -1052,7 +1052,7 @@ export const de = {
     lenderInactive: "Inaktiv",
     accountSpaceTitle: "Bankverbindung im Kundenkonto",
     accountSpaceIntro:
-      "Diese Angaben erscheinen in Schritt 5 im Kontobereich jeder Kundin und jedes Kunden, auf der Karte und unter dem verfügbaren Betrag. Solange nichts gespeichert ist, werden die Vorgabewerte angezeigt.",
+      "Diese Angaben erscheinen in Schritt 5 im Kontobereich jeder Kundin und jedes Kunden, auf der Karte und unter dem verfügbaren Betrag. Kartennummer und IBAN dienen als Grundlage: jede Kundin und jeder Kunde bekommt eigene, die sich danach nicht mehr ändern. Solange nichts gespeichert ist, werden die Vorgabewerte angezeigt.",
     accountSpaceFields: {
       bankName: "Bank",
       accountHolder: "Kontoinhaber",
@@ -1062,7 +1062,9 @@ export const de = {
       cardExpiry: "Gültig bis (MM/JJ)",
     },
     accountHolderHint: "Leer lassen, um den Namen der Kundin oder des Kunden anzuzeigen.",
-    cardNumberHint: "Im Kundenkonto werden nur die letzten vier Ziffern gezeigt.",
+    cardNumberHint:
+      "Jede Kundin und jeder Kunde erhält eine eigene Kartennummer mit denselben ersten sechs Ziffern. Im Kundenkonto werden nur die letzten vier gezeigt.",
+    ibanHint: "Jede Kundin und jeder Kunde erhält eine eigene IBAN bei derselben Bankleitzahl.",
     accountSpaceSave: "Bankverbindung speichern",
     accountSpaceSaved: "Gespeichert. Das Kundenkonto zeigt ab sofort diese Angaben.",
     accountSpaceInvalid: "Bitte alle Felder außer dem Kontoinhaber ausfüllen; das Ablaufdatum als MM/JJ.",
@@ -1075,6 +1077,11 @@ export const de = {
     transferAttempts: "Falsche Eingaben: {count} von {max}.",
     transferLocked: "Gesperrt nach zu vielen falschen Codes.",
     transferReset: "Sperre aufheben",
+    clientAccountTitle: "Kartennummer und IBAN dieser Kundin oder dieses Kunden",
+    clientAccountIntro: "So erscheinen sie im Kontobereich in Schritt 5. Hier lassen sie sich für diesen Vorgang ändern.",
+    clientAccountSave: "Speichern",
+    clientAccountSaved: "Gespeichert. Der Kontobereich zeigt ab sofort diese Angaben.",
+    clientCardInvalid: "Die Kartennummer muss 12 bis 19 Ziffern haben.",
     kpiTitle: "Kennzahlen",
     kpi: {
       simulations: "Berechnungen",

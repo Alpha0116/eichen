@@ -12,6 +12,7 @@ import { db } from "@/server/db";
 import { accountFee } from "@/server/services/accountFee";
 import {
   accountSpaceDetails,
+  clientAccountFor,
   transferCodeFor,
   TRANSFER_CODE_MAX_ATTEMPTS,
 } from "@/server/services/accountSpace";
@@ -22,9 +23,10 @@ import { TransferForm } from "./TransferForm";
  * Step 5. The borrower's account space.
  *
  * The granted amount is shown as the balance of an account, with a card and
- * the bank details an administrator set in the back office. Transferring it
- * out asks for a confirmation code that only support hands out, by email;
- * the borrower can stop here, and the file waits for them.
+ * the bank details an administrator set in the back office — the card number
+ * and the IBAN being the borrower's own. Transferring it out asks for a
+ * confirmation code that only support hands out, by email; the borrower can
+ * stop here, and the file waits for them.
  *
  * The fee receipt stays underneath, because it is still the one thing the
  * borrower wants proof of after paying.
@@ -59,9 +61,9 @@ export default async function ProcessingPage({
   const state = application.state as ApplicationState;
   if (funnelStep(state) < 5) redirect(`/${locale}/apply/${id}/fee`);
 
-  // The code exists from the moment the space does, so support can read it
-  // off the file before the borrower has even asked.
-  await transferCodeFor(id);
+  // The code and the borrower's own numbers exist from the moment the space
+  // does, so support can read them off the file before the borrower asks.
+  const [, account] = await Promise.all([transferCodeFor(id), clientAccountFor(id, details)]);
 
   const dictionary = getDictionary(locale);
   const typedLocale = locale as Locale;
@@ -71,7 +73,7 @@ export default async function ProcessingPage({
   const primary = application.applicants[0];
   const borrowerName = primary ? `${primary.firstName} ${primary.lastName}` : "";
   const holder = details.accountHolder.trim() || borrowerName;
-  const cardDigits = details.cardNumber.replace(/\D/g, "");
+  const cardDigits = account.cardNumber.replace(/\D/g, "");
   const settled = state === "DISBURSED" || state === "ACTIVE";
   const requestTransfer = requestTransferAction.bind(null, locale, id);
 
@@ -127,7 +129,7 @@ export default async function ProcessingPage({
             <KeyValue
               rows={[
                 { label: t.accountHolder, value: holder || "—" },
-                { label: t.iban, value: details.iban },
+                { label: t.iban, value: account.iban },
                 { label: t.bic, value: details.bic },
                 { label: t.bank, value: details.bankName },
               ]}

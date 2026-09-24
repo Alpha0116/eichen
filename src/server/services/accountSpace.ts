@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import { recordAudit } from "../audit";
 import { db } from "../db";
+import { formatIban, ibanFrom, maskIban, normaliseIban } from "./iban";
 
 /**
  * The account space on step 5: the granted amount shown as the balance of an
@@ -32,6 +33,129 @@ export const DEFAULT_ACCOUNT_SPACE: AccountSpaceDetails = {
 };
 
 const SETTINGS_ID = "default";
+
+/** A borrower's own numbers on the account space. */
+export interface ClientAccount {
+  cardNumber: string;
+  iban: string;
+}
+
+/** Card prefix and bank code used when the saved ones cannot be read. */
+const FALLBACK_CARD_PREFIX = "535508";
+const FALLBACK_BANK_CODE = "37040044";
+
+/** Digits, in groups of four. */
+export function formatCardNumber(value: string): string {
+  return value.replace(/\D/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+/** The Luhn check digit that makes `body` a valid card number. */
+function luhnDigit(body: string): string {
+  let sum = 0;
+  for (let i = 0; i < body.length; i += 1) {
+    let digit = Number(body[body.length - 1 - i]);
+    if (i % 2 === 0) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+  }
+  return String((10 - (sum % 10)) % 10);
+}
+
+function randomDigits(count: number): string {
+  let out = "";
+  for (let i = 0; i < count; i += 1) out += String(randomInt(0, 10));
+  return out;
+}
+
+/**
+ * A number of the borrower's own, on the same bank as the saved details: the
+ * card keeps the saved card's first six digits, the IBAN its bank code. Both
+ * carry valid check digits, so neither looks made up next to a real one.
+ */
+export function newClientAccount(details: AccountSpaceDetails): ClientAccount {
+  const savedCard = details.cardNumber.replace(/\D/g, "");
+  const prefix = savedCard.length >= 12 ? savedCard.slice(0, 6) : FALLBACK_CARD_PREFIX;
+  const body = prefix + randomDigits(9);
+  const cardNumber = formatCardNumber(body + luhnDigit(body));
+
+  // A German IBAN is DE, two check digits, an eight-digit bank code and a
+  // ten-digit account number. Anything else saved falls back to the default
+  // bank rather than producing an IBAN of the wrong shape.
+  const savedIban = normaliseIban(details.iban);
+  const bankCode = /^DE\d{20}$/.test(savedIban) ? savedIban.slice(4, 12) : FALLBACK_BANK_CODE;
+  const iban = formatIban(ibanFrom("DE", bankCode + randomDigits(10)));
+
+  return { cardNumber, iban };
+}
+
+/**
+ * The borrower's card number and IBAN, made the first time the account space
+ * is shown and kept from then on — a new client, or new bank details saved in
+ * the back office, never changes the numbers someone has already seen.
+ */
+export async function clientAccountFor(
+  applicationId: string,
+  details: AccountSpaceDetails,
+): Promise<ClientAccount> {
+  const current = await db.application.findUniqueOrThrow({
+    where: { id: applicationId },
+    select: { accountCardNumber: true, accountIban: true },
+  });
+  if (current.accountCardNumber && current.accountIban) {
+    return { cardNumber: current.accountCardNumber, iban: current.accountIban };
+  }
+
+  const fresh = newClientAccount(details);
+  // Conditional, like the transfer code: two first views at once keep one set.
+  await db.application.updateMany({
+    where: { id: applicationId, accountCardNumber: null },
+    data: { accountCardNumber: fresh.cardNumber },
+  });
+  await db.application.updateMany({
+    where: { id: applicationId, accountIban: null },
+    data: { accountIban: fresh.iban },
+  });
+  const settled = await db.application.findUniqueOrThrow({
+    where: { id: applicationId },
+    select: { accountCardNumber: true, accountIban: true },
+  });
+  return {
+    cardNumber: settled.accountCardNumber ?? fresh.cardNumber,
+    iban: settled.accountIban ?? fresh.iban,
+  };
+}
+
+export class ClientAccountInvalid extends Error {
+  constructor(public readonly field: "cardNumber" | "iban") {
+    super(`Invalid ${field}`);
+    this.name = "ClientAccountInvalid";
+  }
+}
+
+/** An administrator correcting one borrower's numbers by hand. */
+export async function saveClientAccount(
+  applicationId: string,
+  account: ClientAccount,
+  options: { agentId: string },
+): Promise<void> {
+  const card = account.cardNumber.replace(/\D/g, "");
+  if (card.length < 12 || card.length > 19) throw new ClientAccountInvalid("cardNumber");
+  if (!maskIban(account.iban)) throw new ClientAccountInvalid("iban");
+
+  await db.application.update({
+    where: { id: applicationId },
+    data: { accountCardNumber: formatCardNumber(card), accountIban: formatIban(account.iban) },
+  });
+  await recordAudit({
+    applicationId,
+    action: "account_space_updated",
+    actorType: "AGENT",
+    actorId: options.agentId,
+    payload: { fields: ["cardNumber", "iban"] },
+  });
+}
 
 /** Wrong codes allowed before the form closes and only support can help. */
 export const TRANSFER_CODE_MAX_ATTEMPTS = 5;

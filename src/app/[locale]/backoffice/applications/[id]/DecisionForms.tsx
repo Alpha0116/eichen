@@ -174,6 +174,61 @@ export function DisburseForm({
 }
 
 /**
+ * This borrower's own card number and IBAN, as their account space shows
+ * them. Filled with what is there now, so a correction is an edit rather than
+ * a retype.
+ */
+export function ClientAccountForm({
+  dictionary,
+  action,
+  cardNumber,
+  iban,
+}: {
+  dictionary: Dictionary;
+  action: (previous: BackofficeState, formData: FormData) => Promise<BackofficeState>;
+  cardNumber: string;
+  iban: string;
+}) {
+  const [state, formAction, pending] = useActionState(action, {});
+  const t = dictionary.backoffice;
+
+  return (
+    <form action={formAction} className="space-y-3">
+      {state.ok ? <Alert tone="positive">{t.clientAccountSaved}</Alert> : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label={t.accountSpaceFields.cardNumber}
+          htmlFor="client-cardNumber"
+          error={state.error === "cardNumber" ? t.clientCardInvalid : undefined}
+          required
+        >
+          <Input
+            id="client-cardNumber"
+            name="cardNumber"
+            defaultValue={cardNumber}
+            inputMode="numeric"
+            required
+            maxLength={23}
+            className="tabular"
+          />
+        </Field>
+        <Field
+          label={t.accountSpaceFields.iban}
+          htmlFor="client-iban"
+          error={state.error === "iban" ? dictionary.errors.ibanInvalid : undefined}
+          required
+        >
+          <Input id="client-iban" name="iban" defaultValue={iban} required maxLength={42} className="tabular" />
+        </Field>
+      </div>
+      <Button type="submit" size="sm" variant="secondary" disabled={pending}>
+        {pending ? dictionary.common.loading : t.clientAccountSave}
+      </Button>
+    </form>
+  );
+}
+
+/**
  * Deleting the file.
  *
  * Its own form, below everything else, with a confirmation the browser puts

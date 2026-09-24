@@ -41,7 +41,7 @@ export function AccountSpaceForm({
         >
           <Input id="as-accountHolder" name="accountHolder" defaultValue={details.accountHolder} maxLength={80} />
         </Field>
-        <Field label={f.iban} htmlFor="as-iban" required>
+        <Field label={f.iban} htmlFor="as-iban" hint={t.ibanHint} required>
           <Input id="as-iban" name="iban" defaultValue={details.iban} required maxLength={42} className="tabular" />
         </Field>
         <Field label={f.bic} htmlFor="as-bic" required>

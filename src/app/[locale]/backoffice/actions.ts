@@ -18,7 +18,12 @@ import { confirmAccountFeePayment, FeeNotPayableError } from "@/server/services/
 import { reviewDocument, type RejectionCode } from "@/server/services/documents";
 import { publishRuleSet } from "@/server/services/rules";
 import { disburse } from "@/server/services/servicing";
-import { resetTransferAttempts, saveAccountSpaceDetails } from "@/server/services/accountSpace";
+import {
+  ClientAccountInvalid,
+  resetTransferAttempts,
+  saveAccountSpaceDetails,
+  saveClientAccount,
+} from "@/server/services/accountSpace";
 
 export type BackofficeState = { error?: string; ok?: boolean; details?: string[] };
 
@@ -281,4 +286,32 @@ export async function resetTransferAttemptsAction(
   await resetTransferAttempts(applicationId, { agentId: agent.id });
 
   revalidatePath(`/${locale}/backoffice/applications/${applicationId}`);
+}
+
+/** Corrects one borrower's card number and IBAN on their account space. */
+export async function saveClientAccountAction(
+  localeParam: string,
+  applicationId: string,
+  _previous: BackofficeState,
+  formData: FormData,
+): Promise<BackofficeState> {
+  const locale = safeLocale(localeParam);
+  const agent = await requireStaff(locale);
+
+  try {
+    await saveClientAccount(
+      applicationId,
+      {
+        cardNumber: String(formData.get("cardNumber") ?? ""),
+        iban: String(formData.get("iban") ?? ""),
+      },
+      { agentId: agent.id },
+    );
+  } catch (error) {
+    if (error instanceof ClientAccountInvalid) return { error: error.field };
+    throw error;
+  }
+
+  revalidatePath(`/${locale}/backoffice/applications/${applicationId}`);
+  return { ok: true };
 }

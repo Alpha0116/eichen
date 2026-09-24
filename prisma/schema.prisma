@@ -177,6 +177,13 @@ model Application {
   transferCodeAttempts Int       @default(0)
   transferRequestedAt  DateTime?
 
+  /// The borrower's own card number and IBAN on that account space, drawn
+  /// from the bank details in AccountSpaceSettings on first view and open to
+  /// correction by an administrator. What the borrower sees, not an account
+  /// anything is paid from.
+  accountCardNumber String?
+  accountIban       String?
+
   /// Hash of the resume link token, so a draft can be reopened from an email
   /// without the raw token ever being stored.
   resumeTokenHash String?   @unique
@@ -579,7 +586,9 @@ model AccountFee {
 
 /// The bank details shown on the borrower's account space on step 5, set by
 /// an administrator in the back office. One row, keyed "default"; until it is
-/// saved the defaults in src/server/services/accountSpace.ts are shown.
+/// saved the defaults in src/server/services/accountSpace.ts are shown. The
+/// card number and IBAN here are the base each borrower's own are drawn from:
+/// the same card prefix and bank code, a number of their own.
 model AccountSpaceSettings {
   id            String   @id @default("default")
   bankName      String

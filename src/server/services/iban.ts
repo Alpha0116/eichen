@@ -1,10 +1,8 @@
 /**
- * IBAN handling.
+ * IBAN handling: checking and masking the borrower's payout account, and
+ * composing the account-space IBANs shown on step 5.
  *
- * The only operation this application performs on an IBAN is masking it. The
- * full number is never stored, never logged and never written to the audit
- * trail: it belongs at the payment provider, not in this database or its
- * backups.
+ * An IBAN is never logged and never written to the audit trail.
  */
 
 /** Length by country, for the ones this product accepts. */
@@ -34,7 +32,10 @@ const normalise = normaliseIban;
  * would silently lose precision and accept invalid accounts.
  */
 function checksumValid(iban: string): boolean {
-  const rearranged = iban.slice(4) + iban.slice(0, 4);
+  return mod97(iban.slice(4) + iban.slice(0, 4)) === 1;
+}
+
+function mod97(rearranged: string): number {
   let remainder = 0;
   for (const character of rearranged) {
     const code = character.charCodeAt(0);
@@ -42,12 +43,26 @@ function checksumValid(iban: string): boolean {
       code >= 65 && code <= 90
         ? String(code - 55) // A→10 … Z→35
         : character;
-    if (!/^\d+$/.test(chunk)) return false;
+    if (!/^\d+$/.test(chunk)) return -1;
     for (const digit of chunk) {
       remainder = (remainder * 10 + Number(digit)) % 97;
     }
   }
-  return remainder === 1;
+  return remainder;
+}
+
+/**
+ * A complete IBAN for a country and a BBAN, with the check digits worked out
+ * — so a number made up here passes the same test as one typed by a person.
+ */
+export function ibanFrom(country: string, bban: string): string {
+  const check = 98 - mod97(`${bban}${country}00`);
+  return `${country}${String(check).padStart(2, "0")}${bban}`;
+}
+
+/** Groups of four, the way an IBAN is printed. */
+export function formatIban(value: string): string {
+  return normalise(value).replace(/(.{4})(?=.)/g, "$1 ");
 }
 
 /**

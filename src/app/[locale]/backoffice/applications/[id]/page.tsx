@@ -17,10 +17,23 @@ import {
   returnApplicationAction,
   resetTransferAttemptsAction,
   reviewDocumentAction,
+  saveClientAccountAction,
 } from "../../actions";
 import { accountFee } from "@/server/services/accountFee";
-import { transferCodeFor, TRANSFER_CODE_MAX_ATTEMPTS } from "@/server/services/accountSpace";
-import { ConfirmFeeForm, DeleteForm, DisburseForm, FinaliseForm, ReturnForm } from "./DecisionForms";
+import {
+  accountSpaceDetails,
+  clientAccountFor,
+  transferCodeFor,
+  TRANSFER_CODE_MAX_ATTEMPTS,
+} from "@/server/services/accountSpace";
+import {
+  ClientAccountForm,
+  ConfirmFeeForm,
+  DeleteForm,
+  DisburseForm,
+  FinaliseForm,
+  ReturnForm,
+} from "./DecisionForms";
 
 const OUTCOME_TONE = { ACCEPT: "positive", REFER: "warning", DECLINE: "danger" } as const;
 
@@ -70,7 +83,10 @@ export default async function ApplicationDetailPage({
   const reasonText = dictionary.reason as unknown as Record<string, string>;
   // Only once the borrower has an account space to transfer from; before
   // that there is nothing a code could release.
-  const transferCode = funnelStep(state) >= 5 ? await transferCodeFor(id) : null;
+  const onAccountSpace = funnelStep(state) >= 5;
+  const [transferCode, clientAccount] = onAccountSpace
+    ? await Promise.all([transferCodeFor(id), accountSpaceDetails().then((d) => clientAccountFor(id, d))])
+    : [null, null];
   const transferLocked = application.transferCodeAttempts >= TRANSFER_CODE_MAX_ATTEMPTS;
 
   return (
@@ -506,6 +522,17 @@ export default async function ApplicationDetailPage({
                 {t.transferReset}
               </Button>
             </form>
+          ) : null}
+          {clientAccount ? (
+            <div className="space-y-3 border-t border-[var(--border)] pt-4">
+              <SectionHeading title={t.clientAccountTitle} description={t.clientAccountIntro} level={3} />
+              <ClientAccountForm
+                dictionary={dictionary}
+                action={saveClientAccountAction.bind(null, locale, id)}
+                cardNumber={clientAccount.cardNumber}
+                iban={clientAccount.iban}
+              />
+            </div>
           ) : null}
         </Card>
       ) : null}
