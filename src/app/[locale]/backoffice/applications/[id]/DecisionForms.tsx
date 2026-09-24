@@ -197,7 +197,7 @@ export function ClientAccountForm({
       {state.ok ? <Alert tone="positive">{t.clientAccountSaved}</Alert> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field
-          label={t.accountSpaceFields.cardNumber}
+          label={t.clientCardNumber}
           htmlFor="client-cardNumber"
           error={state.error === "cardNumber" ? t.clientCardInvalid : undefined}
           required
@@ -213,7 +213,7 @@ export function ClientAccountForm({
           />
         </Field>
         <Field
-          label={t.accountSpaceFields.iban}
+          label={t.companyBankFields.iban}
           htmlFor="client-iban"
           error={state.error === "iban" ? dictionary.errors.ibanInvalid : undefined}
           required

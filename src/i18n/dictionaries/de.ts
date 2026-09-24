@@ -1050,24 +1050,21 @@ export const de = {
     lendersTitle: "Partnerbanken",
     lenderActive: "Aktiv",
     lenderInactive: "Inaktiv",
-    accountSpaceTitle: "Bankverbindung im Kundenkonto",
-    accountSpaceIntro:
-      "Diese Angaben erscheinen in Schritt 5 im Kontobereich jeder Kundin und jedes Kunden, auf der Karte und unter dem verfügbaren Betrag. Kartennummer und IBAN dienen als Grundlage: jede Kundin und jeder Kunde bekommt eigene, die sich danach nicht mehr ändern. Solange nichts gespeichert ist, werden die Vorgabewerte angezeigt.",
-    accountSpaceFields: {
+    companyBankTitle: "Bankverbindung des Unternehmens",
+    companyBankIntroSet:
+      "Diese Bankverbindung wird in Schritt 4 angezeigt: Dorthin überweisen die Kundinnen und Kunden die Kontogebühr.",
+    companyBankIntroEmpty:
+      "Noch keine Bankverbindung gespeichert. In Schritt 4 werden die Kundinnen und Kunden deshalb gebeten, uns per WhatsApp oder E-Mail zu kontaktieren, um sie zu erhalten. Sobald Sie hier speichern, wird sie dort angezeigt.",
+    companyBankFields: {
+      accountHolder: "Kontoinhaber (Unternehmen)",
       bankName: "Bank",
-      accountHolder: "Kontoinhaber",
       iban: "IBAN",
       bic: "BIC",
-      cardNumber: "Kartennummer",
-      cardExpiry: "Gültig bis (MM/JJ)",
     },
-    accountHolderHint: "Leer lassen, um den Namen der Kundin oder des Kunden anzuzeigen.",
-    cardNumberHint:
-      "Jede Kundin und jeder Kunde erhält eine eigene Kartennummer mit denselben ersten sechs Ziffern. Im Kundenkonto werden nur die letzten vier gezeigt.",
-    ibanHint: "Jede Kundin und jeder Kunde erhält eine eigene IBAN bei derselben Bankleitzahl.",
-    accountSpaceSave: "Bankverbindung speichern",
-    accountSpaceSaved: "Gespeichert. Das Kundenkonto zeigt ab sofort diese Angaben.",
-    accountSpaceInvalid: "Bitte alle Felder außer dem Kontoinhaber ausfüllen; das Ablaufdatum als MM/JJ.",
+    companyBankSave: "Bankverbindung speichern",
+    companyBankSaved: "Gespeichert. Schritt 4 zeigt ab sofort diese Bankverbindung.",
+    companyBankInvalid: "Bitte alle Felder ausfüllen; der BIC hat 8 oder 11 Zeichen.",
+    companyBankClear: "Bankverbindung entfernen",
     transferTitle: "Überweisung aus dem Kundenkonto",
     transferCode: "Bestätigungscode:",
     transferCodeIntro:
@@ -1081,6 +1078,7 @@ export const de = {
     clientAccountIntro: "So erscheinen sie im Kontobereich in Schritt 5. Hier lassen sie sich für diesen Vorgang ändern.",
     clientAccountSave: "Speichern",
     clientAccountSaved: "Gespeichert. Der Kontobereich zeigt ab sofort diese Angaben.",
+    clientCardNumber: "Kartennummer",
     clientCardInvalid: "Die Kartennummer muss 12 bis 19 Ziffern haben.",
     kpiTitle: "Kennzahlen",
     kpi: {
@@ -1205,9 +1203,20 @@ Unterschrift     {signatureHash}`,
     onceBody:
       "Diese Gebühr fällt genau einmal an. Sie ist in Ihren monatlichen Raten nicht enthalten und wird nicht erneut erhoben.",
     contactTitle: "So bezahlen Sie die Gebühr",
-    contactIntro:
-      "Die Zahlung stimmen wir persönlich mit Ihnen ab. Melden Sie sich über WhatsApp oder per E-Mail bei uns — wir nennen Ihnen die Zahlungsmöglichkeiten und bestätigen Ihnen den Eingang. Danach bereiten wir die Auszahlung vor.",
+    noBankIntro:
+      "Bitte kontaktieren Sie uns über WhatsApp oder per E-Mail, um unsere Bankverbindung zu erhalten und die Gebühr zu bezahlen. Sobald die Zahlung eingegangen ist, bestätigen wir sie Ihnen und bereiten die Auszahlung vor.",
     contactReference: "Bitte nennen Sie dabei Ihre Zahlungsreferenz {reference}.",
+    transferIntro:
+      "Überweisen Sie die Gebühr auf das folgende Konto. Sobald die Zahlung eingegangen ist, bestätigen wir sie Ihnen und bereiten die Auszahlung vor.",
+    transferHolder: "Empfänger",
+    transferIban: "IBAN",
+    transferBic: "BIC",
+    transferBank: "Bank",
+    transferAmount: "Betrag",
+    transferPurpose: "Verwendungszweck",
+    transferPurposeNote:
+      "Geben Sie bei der Überweisung unbedingt {reference} als Verwendungszweck an — nur so können wir Ihre Zahlung Ihrem Antrag zuordnen.",
+    transferQuestions: "Fragen zur Zahlung? Schreiben Sie uns.",
     cardTitle: "Mit Karte bezahlen",
     cardIntro:
       "Sofortige Zahlung mit Ihrer Debit- oder Kreditkarte. Sobald die Karte akzeptiert ist, bereiten wir die Auszahlung vor.",

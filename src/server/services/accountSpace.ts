@@ -1,48 +1,40 @@
 import { randomInt } from "node:crypto";
 import { recordAudit } from "../audit";
 import { db } from "../db";
-import { formatIban, ibanFrom, maskIban, normaliseIban } from "./iban";
+import { formatIban, ibanFrom, maskIban } from "./iban";
 
 /**
  * The account space on step 5: the granted amount shown as the balance of an
- * account, on a card carrying the bank details an administrator set.
+ * account, with a card and an IBAN of the borrower's own.
  *
  * Moving the money out of it takes a confirmation code the borrower does not
  * receive on their own. They ask for it by email, support reads it off the
  * file in the back office, and the flow is allowed to stop at that request.
  */
 
-export interface AccountSpaceDetails {
-  bankName: string;
-  /** Blank means the borrower's own name goes on the card. */
-  accountHolder: string;
-  iban: string;
-  bic: string;
-  cardNumber: string;
-  cardExpiry: string;
-}
-
-/** What the space shows until an administrator saves details of their own. */
-export const DEFAULT_ACCOUNT_SPACE: AccountSpaceDetails = {
+/**
+ * What every account space shares. Fixed rather than configured: the bank
+ * details an administrator enters are the company's own, for the fee, and
+ * have no place on a borrower's card.
+ */
+export const ACCOUNT_SPACE = {
   bankName: "Eichen Bank",
-  accountHolder: "",
-  iban: "DE89 3704 0044 0532 0130 00",
   bic: "COBADEFFXXX",
-  cardNumber: "5355 0812 3456 7890",
   cardExpiry: "12/29",
-};
+  /** First six digits of every borrower's card. */
+  cardPrefix: "535508",
+  /** Bank code inside every borrower's IBAN. */
+  bankCode: "37040044",
+} as const;
 
-const SETTINGS_ID = "default";
+/** Wrong codes allowed before the form closes and only support can help. */
+export const TRANSFER_CODE_MAX_ATTEMPTS = 5;
 
 /** A borrower's own numbers on the account space. */
 export interface ClientAccount {
   cardNumber: string;
   iban: string;
 }
-
-/** Card prefix and bank code used when the saved ones cannot be read. */
-const FALLBACK_CARD_PREFIX = "535508";
-const FALLBACK_BANK_CODE = "37040044";
 
 /** Digits, in groups of four. */
 export function formatCardNumber(value: string): string {
@@ -70,35 +62,24 @@ function randomDigits(count: number): string {
 }
 
 /**
- * A number of the borrower's own, on the same bank as the saved details: the
- * card keeps the saved card's first six digits, the IBAN its bank code. Both
- * carry valid check digits, so neither looks made up next to a real one.
+ * A card number and IBAN of the borrower's own, on the account space's bank.
+ * Both carry valid check digits — Luhn for the card, ISO 13616 for the IBAN
+ * (DE, check digits, eight-digit bank code, ten-digit account) — so neither
+ * looks made up next to a real one.
  */
-export function newClientAccount(details: AccountSpaceDetails): ClientAccount {
-  const savedCard = details.cardNumber.replace(/\D/g, "");
-  const prefix = savedCard.length >= 12 ? savedCard.slice(0, 6) : FALLBACK_CARD_PREFIX;
-  const body = prefix + randomDigits(9);
+export function newClientAccount(): ClientAccount {
+  const body = ACCOUNT_SPACE.cardPrefix + randomDigits(9);
   const cardNumber = formatCardNumber(body + luhnDigit(body));
-
-  // A German IBAN is DE, two check digits, an eight-digit bank code and a
-  // ten-digit account number. Anything else saved falls back to the default
-  // bank rather than producing an IBAN of the wrong shape.
-  const savedIban = normaliseIban(details.iban);
-  const bankCode = /^DE\d{20}$/.test(savedIban) ? savedIban.slice(4, 12) : FALLBACK_BANK_CODE;
-  const iban = formatIban(ibanFrom("DE", bankCode + randomDigits(10)));
-
+  const iban = formatIban(ibanFrom("DE", ACCOUNT_SPACE.bankCode + randomDigits(10)));
   return { cardNumber, iban };
 }
 
 /**
  * The borrower's card number and IBAN, made the first time the account space
- * is shown and kept from then on — a new client, or new bank details saved in
- * the back office, never changes the numbers someone has already seen.
+ * is shown and kept from then on: a new client never changes the numbers
+ * someone has already seen.
  */
-export async function clientAccountFor(
-  applicationId: string,
-  details: AccountSpaceDetails,
-): Promise<ClientAccount> {
+export async function clientAccountFor(applicationId: string): Promise<ClientAccount> {
   const current = await db.application.findUniqueOrThrow({
     where: { id: applicationId },
     select: { accountCardNumber: true, accountIban: true },
@@ -107,7 +88,7 @@ export async function clientAccountFor(
     return { cardNumber: current.accountCardNumber, iban: current.accountIban };
   }
 
-  const fresh = newClientAccount(details);
+  const fresh = newClientAccount();
   // Conditional, like the transfer code: two first views at once keep one set.
   await db.application.updateMany({
     where: { id: applicationId, accountCardNumber: null },
@@ -154,41 +135,6 @@ export async function saveClientAccount(
     actorType: "AGENT",
     actorId: options.agentId,
     payload: { fields: ["cardNumber", "iban"] },
-  });
-}
-
-/** Wrong codes allowed before the form closes and only support can help. */
-export const TRANSFER_CODE_MAX_ATTEMPTS = 5;
-
-export async function accountSpaceDetails(): Promise<AccountSpaceDetails> {
-  const row = await db.accountSpaceSettings.findUnique({ where: { id: SETTINGS_ID } });
-  if (!row) return DEFAULT_ACCOUNT_SPACE;
-  return {
-    bankName: row.bankName,
-    accountHolder: row.accountHolder,
-    iban: row.iban,
-    bic: row.bic,
-    cardNumber: row.cardNumber,
-    cardExpiry: row.cardExpiry,
-  };
-}
-
-export async function saveAccountSpaceDetails(
-  details: AccountSpaceDetails,
-  options: { agentId: string },
-): Promise<void> {
-  await db.accountSpaceSettings.upsert({
-    where: { id: SETTINGS_ID },
-    create: { id: SETTINGS_ID, ...details, updatedBy: options.agentId },
-    update: { ...details, updatedBy: options.agentId },
-  });
-  // Field names only: the values are bank details, which the trail never holds.
-  await recordAudit({
-    applicationId: null,
-    action: "account_space_updated",
-    actorType: "AGENT",
-    actorId: options.agentId,
-    payload: { fields: Object.keys(details) },
   });
 }
 

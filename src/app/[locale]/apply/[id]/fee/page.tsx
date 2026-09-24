@@ -9,6 +9,7 @@ import { requireApplicationAccess } from "@/server/access";
 import { ACCOUNT_FEE } from "@/server/config";
 import { db } from "@/server/db";
 import { accountFee, issueAccountFee } from "@/server/services/accountFee";
+import { companyBankAccount } from "@/server/services/companyBank";
 
 /**
  * Step 4. The account fee.
@@ -38,7 +39,10 @@ export default async function FeePage({
   // Signature issues the fee, but a file that reached this page without one —
   // an interrupted signature callback, a fee seeded by a script — should not
   // dead-end. Issuing is idempotent, so this cannot produce a second charge.
-  const fee = (await accountFee(id)) ?? (await issueAccountFee(id));
+  const [fee, bank] = await Promise.all([
+    accountFee(id).then((existing) => existing ?? issueAccountFee(id)),
+    companyBankAccount(),
+  ]);
 
   const dictionary = getDictionary(locale);
   const typedLocale = locale as Locale;
@@ -83,18 +87,44 @@ export default async function FeePage({
         </Alert>
       </Card>
 
-      {/* Card payment is switched off. The fee is settled with support
-          directly, so the step ends in the two ways to reach us rather than in
-          a payment form — with the fee's own reference to quote, which is what
-          lets support match a payment to this file. */}
-      <Card elevation="md" className="space-y-4 p-5 sm:p-6">
-        <SectionHeading title={t.contactTitle} description={t.contactIntro} level={3} />
-        <Alert variant="outline" tone="accent">
-          <p>{interpolate(t.contactReference, { reference: fee.reference })}</p>
-        </Alert>
-        <ContactButtons dictionary={dictionary} reference={application.reference} />
-        <p className="text-sm leading-relaxed text-[var(--muted)]">{dictionary.contact.feeBody}</p>
-      </Card>
+      {/* Card payment is switched off; the fee is a bank transfer. With the
+          company's account saved in the back office, the step ends in the
+          details to transfer to, the fee's reference standing in as the
+          transfer's purpose so support can match the payment to this file.
+          Without it, the borrower is sent to support for the details — never
+          shown an account number nobody entered. */}
+      {bank ? (
+        <Card elevation="md" className="space-y-4 p-5 sm:p-6">
+          <SectionHeading title={t.contactTitle} description={t.transferIntro} level={3} />
+          <KeyValue
+            rows={[
+              { label: t.transferHolder, value: bank.accountHolder },
+              { label: t.transferIban, value: bank.iban },
+              { label: t.transferBic, value: bank.bic },
+              { label: t.transferBank, value: bank.bankName },
+              {
+                label: t.transferAmount,
+                value: formatMoney(fee.amount, typedLocale, fee.currency as CurrencyCode),
+              },
+              { label: t.transferPurpose, value: fee.reference },
+            ]}
+          />
+          <Alert variant="outline" tone="accent">
+            <p>{interpolate(t.transferPurposeNote, { reference: fee.reference })}</p>
+          </Alert>
+          <p className="text-sm leading-relaxed text-[var(--muted)]">{t.transferQuestions}</p>
+          <ContactButtons dictionary={dictionary} reference={application.reference} size="sm" />
+        </Card>
+      ) : (
+        <Card elevation="md" className="space-y-4 p-5 sm:p-6">
+          <SectionHeading title={t.contactTitle} description={t.noBankIntro} level={3} />
+          <Alert variant="outline" tone="accent">
+            <p>{interpolate(t.contactReference, { reference: fee.reference })}</p>
+          </Alert>
+          <ContactButtons dictionary={dictionary} reference={application.reference} />
+          <p className="text-sm leading-relaxed text-[var(--muted)]">{dictionary.contact.feeBody}</p>
+        </Card>
+      )}
     </div>
   );
 }

@@ -39,6 +39,7 @@ export const AUDIT_ACTIONS = [
   "transfer_requested",
   "account_space_updated",
   "transfer_attempts_reset",
+  "company_bank_updated",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

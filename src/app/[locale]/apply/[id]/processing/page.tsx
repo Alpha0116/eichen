@@ -11,7 +11,7 @@ import { mailtoLink } from "@/server/config";
 import { db } from "@/server/db";
 import { accountFee } from "@/server/services/accountFee";
 import {
-  accountSpaceDetails,
+  ACCOUNT_SPACE,
   clientAccountFor,
   transferCodeFor,
   TRANSFER_CODE_MAX_ATTEMPTS,
@@ -23,8 +23,7 @@ import { TransferForm } from "./TransferForm";
  * Step 5. The borrower's account space.
  *
  * The granted amount is shown as the balance of an account, with a card and
- * the bank details an administrator set in the back office — the card number
- * and the IBAN being the borrower's own. Transferring it out asks for a
+ * an IBAN of the borrower's own. Transferring it out asks for a
  * confirmation code that only support hands out, by email; the borrower can
  * stop here, and the file waits for them.
  *
@@ -39,7 +38,7 @@ export default async function ProcessingPage({
   const { locale, id } = await params;
   await requireApplicationAccess(id);
 
-  const [application, fee, details] = await Promise.all([
+  const [application, fee] = await Promise.all([
     db.application.findUniqueOrThrow({
       where: { id },
       select: {
@@ -55,7 +54,6 @@ export default async function ProcessingPage({
       },
     }),
     accountFee(id),
-    accountSpaceDetails(),
   ]);
 
   const state = application.state as ApplicationState;
@@ -63,7 +61,7 @@ export default async function ProcessingPage({
 
   // The code and the borrower's own numbers exist from the moment the space
   // does, so support can read them off the file before the borrower asks.
-  const [, account] = await Promise.all([transferCodeFor(id), clientAccountFor(id, details)]);
+  const [, account] = await Promise.all([transferCodeFor(id), clientAccountFor(id)]);
 
   const dictionary = getDictionary(locale);
   const typedLocale = locale as Locale;
@@ -72,7 +70,6 @@ export default async function ProcessingPage({
   const balance = application.grantedAmount ?? application.amount;
   const primary = application.applicants[0];
   const borrowerName = primary ? `${primary.firstName} ${primary.lastName}` : "";
-  const holder = details.accountHolder.trim() || borrowerName;
   const cardDigits = account.cardNumber.replace(/\D/g, "");
   const settled = state === "DISBURSED" || state === "ACTIVE";
   const requestTransfer = requestTransferAction.bind(null, locale, id);
@@ -90,14 +87,14 @@ export default async function ProcessingPage({
               ever shows the last four digits, whatever was saved behind it. */}
           <div
             role="img"
-            aria-label={`${t.cardLabel}: ${details.bankName}, •••• ${cardDigits.slice(-4)}`}
+            aria-label={`${t.cardLabel}: ${ACCOUNT_SPACE.bankName}, •••• ${cardDigits.slice(-4)}`}
             className="relative aspect-[1.586] w-full max-w-[20rem] overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--primary)] via-[color-mix(in_srgb,var(--primary)_80%,black)] to-[color-mix(in_srgb,var(--primary)_55%,black)] p-5 text-white shadow-[var(--shadow-lg)]"
           >
             <div aria-hidden className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10" />
             <div aria-hidden className="absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-[var(--accent)]/20" />
             <div className="relative flex h-full flex-col justify-between">
               <div className="flex items-start justify-between gap-3">
-                <span className="text-sm font-semibold tracking-wide">{details.bankName}</span>
+                <span className="text-sm font-semibold tracking-wide">{ACCOUNT_SPACE.bankName}</span>
                 <span aria-hidden className="h-7 w-10 rounded-md bg-gradient-to-br from-amber-200 to-amber-400 opacity-90" />
               </div>
               <p className="tabular text-lg tracking-[0.18em] sm:text-xl">
@@ -106,11 +103,11 @@ export default async function ProcessingPage({
               <div className="flex items-end justify-between gap-3 text-xs">
                 <div className="min-w-0">
                   <p className="uppercase tracking-wide text-white/60">{t.cardHolder}</p>
-                  <p className="truncate font-medium uppercase">{holder || "—"}</p>
+                  <p className="truncate font-medium uppercase">{borrowerName || "—"}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="uppercase tracking-wide text-white/60">{t.cardValid}</p>
-                  <p className="tabular font-medium">{details.cardExpiry}</p>
+                  <p className="tabular font-medium">{ACCOUNT_SPACE.cardExpiry}</p>
                 </div>
               </div>
             </div>
@@ -128,10 +125,10 @@ export default async function ProcessingPage({
             </div>
             <KeyValue
               rows={[
-                { label: t.accountHolder, value: holder || "—" },
+                { label: t.accountHolder, value: borrowerName || "—" },
                 { label: t.iban, value: account.iban },
-                { label: t.bic, value: details.bic },
-                { label: t.bank, value: details.bankName },
+                { label: t.bic, value: ACCOUNT_SPACE.bic },
+                { label: t.bank, value: ACCOUNT_SPACE.bankName },
               ]}
             />
           </div>

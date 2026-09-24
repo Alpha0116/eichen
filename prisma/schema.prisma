@@ -177,10 +177,9 @@ model Application {
   transferCodeAttempts Int       @default(0)
   transferRequestedAt  DateTime?
 
-  /// The borrower's own card number and IBAN on that account space, drawn
-  /// from the bank details in AccountSpaceSettings on first view and open to
-  /// correction by an administrator. What the borrower sees, not an account
-  /// anything is paid from.
+  /// The borrower's own card number and IBAN on that account space, made on
+  /// first view and open to correction by an administrator. What the
+  /// borrower sees, not an account anything is paid from.
   accountCardNumber String?
   accountIban       String?
 
@@ -584,20 +583,16 @@ model AccountFee {
   @@index([status])
 }
 
-/// The bank details shown on the borrower's account space on step 5, set by
-/// an administrator in the back office. One row, keyed "default"; until it is
-/// saved the defaults in src/server/services/accountSpace.ts are shown. The
-/// card number and IBAN here are the base each borrower's own are drawn from:
-/// the same card prefix and bank code, a number of their own.
-model AccountSpaceSettings {
+/// The company's own bank account, set by an administrator in the back
+/// office and shown on step 4 as where to transfer the account fee. One row,
+/// keyed "default". While there is none, the borrower is asked to write to
+/// support for the details instead.
+model CompanyBankAccount {
   id            String   @id @default("default")
-  bankName      String
-  /// Blank means the borrower's own name is printed on the card.
   accountHolder String
+  bankName      String
   iban          String
   bic           String
-  cardNumber    String
-  cardExpiry    String
   updatedAt     DateTime @updatedAt
   updatedBy     String?
 }

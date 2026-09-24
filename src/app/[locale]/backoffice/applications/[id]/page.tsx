@@ -21,7 +21,6 @@ import {
 } from "../../actions";
 import { accountFee } from "@/server/services/accountFee";
 import {
-  accountSpaceDetails,
   clientAccountFor,
   transferCodeFor,
   TRANSFER_CODE_MAX_ATTEMPTS,
@@ -85,7 +84,7 @@ export default async function ApplicationDetailPage({
   // that there is nothing a code could release.
   const onAccountSpace = funnelStep(state) >= 5;
   const [transferCode, clientAccount] = onAccountSpace
-    ? await Promise.all([transferCodeFor(id), accountSpaceDetails().then((d) => clientAccountFor(id, d))])
+    ? await Promise.all([transferCodeFor(id), clientAccountFor(id)])
     : [null, null];
   const transferLocked = application.transferCodeAttempts >= TRANSFER_CODE_MAX_ATTEMPTS;
 

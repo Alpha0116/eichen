@@ -21,9 +21,13 @@ import { disburse } from "@/server/services/servicing";
 import {
   ClientAccountInvalid,
   resetTransferAttempts,
-  saveAccountSpaceDetails,
   saveClientAccount,
 } from "@/server/services/accountSpace";
+import {
+  clearCompanyBankAccount,
+  CompanyIbanInvalid,
+  saveCompanyBankAccount,
+} from "@/server/services/companyBank";
 
 export type BackofficeState = { error?: string; ok?: boolean; details?: string[] };
 
@@ -243,23 +247,18 @@ export async function deleteApplicationAction(
   redirect(`/${locale}/backoffice`);
 }
 
-const accountSpaceSchema = z.object({
+const companyBankSchema = z.object({
+  accountHolder: z.string().trim().min(1).max(80),
   bankName: z.string().trim().min(1).max(80),
-  accountHolder: z.string().trim().max(80),
   iban: z.string().trim().min(1).max(42),
-  bic: z.string().trim().min(1).max(11),
-  cardNumber: z.string().trim().regex(/^[\d ]{12,23}$/),
-  cardExpiry: z.string().trim().regex(/^(0[1-9]|1[0-2])\/\d{2}$/),
+  bic: z.string().trim().regex(/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/),
 });
 
 /**
- * Saves the bank details every borrower sees on their account space.
- *
- * Checked for shape only. These are what an administrator chose to show,
- * not an account anything is paid into from here, so there is nothing to
- * verify them against.
+ * Saves the company's bank account, which step 4 then shows as where the
+ * account fee is paid.
  */
-export async function saveAccountSpaceAction(
+export async function saveCompanyBankAction(
   localeParam: string,
   _previous: BackofficeState,
   formData: FormData,
@@ -267,13 +266,27 @@ export async function saveAccountSpaceAction(
   const locale = safeLocale(localeParam);
   const agent = await requireStaff(locale);
 
-  const parsed = accountSpaceSchema.safeParse(Object.fromEntries(formData));
+  const parsed = companyBankSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "validation" };
 
-  await saveAccountSpaceDetails(parsed.data, { agentId: agent.id });
+  try {
+    await saveCompanyBankAccount(parsed.data, { agentId: agent.id });
+  } catch (error) {
+    if (error instanceof CompanyIbanInvalid) return { error: "iban" };
+    throw error;
+  }
 
   revalidatePath(`/${locale}/backoffice`);
   return { ok: true };
+}
+
+export async function clearCompanyBankAction(localeParam: string): Promise<void> {
+  const locale = safeLocale(localeParam);
+  const agent = await requireStaff(locale);
+
+  await clearCompanyBankAccount({ agentId: agent.id });
+
+  revalidatePath(`/${locale}/backoffice`);
 }
 
 export async function resetTransferAttemptsAction(

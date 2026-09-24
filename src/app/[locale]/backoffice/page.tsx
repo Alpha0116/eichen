@@ -5,9 +5,9 @@ import { getDictionary, interpolate, type Locale } from "@/i18n";
 import { formatDateTime, formatMoney } from "@/i18n/format";
 import { requireStaff } from "@/server/access";
 import { queue, queueCounts } from "@/server/services/backoffice";
-import { accountSpaceDetails } from "@/server/services/accountSpace";
-import { saveAccountSpaceAction } from "./actions";
-import { AccountSpaceForm } from "./AccountSpaceForm";
+import { companyBankAccount } from "@/server/services/companyBank";
+import { clearCompanyBankAction, saveCompanyBankAction } from "./actions";
+import { CompanyBankForm } from "./CompanyBankForm";
 
 const OUTCOME_TONE = { ACCEPT: "positive", REFER: "warning", DECLINE: "danger" } as const;
 
@@ -30,7 +30,7 @@ export default async function QueuePage({
   // worth a permanent chip.
   const ACTIONABLE: ApplicationState[] = ["SUBMITTED", "FEE_PAID"];
 
-  const [{ items, total }, counts, accountSpace] = await Promise.all([
+  const [{ items, total }, counts, companyBank] = await Promise.all([
     queue({
     state: (APPLICATION_STATES as readonly string[]).includes(filters.state ?? "")
       ? (filters.state as ApplicationState)
@@ -42,7 +42,7 @@ export default async function QueuePage({
       query: filters.q,
     }),
     queueCounts(),
-    accountSpaceDetails(),
+    companyBankAccount(),
   ]);
 
   const chips: { label: string; value: string; count: number; tone: "accent" | "neutral" }[] = [
@@ -218,12 +218,15 @@ export default async function QueuePage({
       {/* Below the queue, not beside it: set once and rarely touched, it
           should not compete with the files waiting on a decision. */}
       <Card className="space-y-4 p-5">
-        <SectionHeading title={dictionary.backoffice.accountSpaceTitle} level={3} />
-        <p className="text-sm leading-relaxed text-[var(--muted)]">{dictionary.backoffice.accountSpaceIntro}</p>
-        <AccountSpaceForm
+        <SectionHeading title={dictionary.backoffice.companyBankTitle} level={3} />
+        <p className="text-sm leading-relaxed text-[var(--muted)]">
+          {companyBank ? dictionary.backoffice.companyBankIntroSet : dictionary.backoffice.companyBankIntroEmpty}
+        </p>
+        <CompanyBankForm
           dictionary={dictionary}
-          action={saveAccountSpaceAction.bind(null, locale)}
-          details={accountSpace}
+          action={saveCompanyBankAction.bind(null, locale)}
+          clearAction={clearCompanyBankAction.bind(null, locale)}
+          account={companyBank}
         />
       </Card>
     </div>
