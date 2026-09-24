@@ -15,7 +15,7 @@ import { ThreeSteps } from "@/components/landing/ThreeSteps";
 import { priceLoan } from "@/domain/finance/quote";
 import { getDictionary, type Locale } from "@/i18n";
 import { formatMoney, formatPercent } from "@/i18n/format";
-import { CONTACT, PRODUCT } from "@/server/config";
+import { PRODUCT } from "@/server/config";
 import { homeJsonLd } from "@/i18n/seo";
 import { getSessionUser } from "@/server/auth/session";
 
@@ -66,12 +66,12 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   return (
     <div>
       {/* Structured data, for the panel a search engine builds out of a site.
-          Only what the page already says: no rating, no invented address. */}
+          Only what the page and the imprint already say, and no rating. */}
       <script
         type="application/ld+json"
         // The payload is built from configuration and the dictionaries, not
         // from anything a visitor can supply.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd(typedLocale, CONTACT.email)) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd(typedLocale)) }}
       />
 
       {/* --- Hero: a full-viewport photograph, slowly drifting ------------- */}

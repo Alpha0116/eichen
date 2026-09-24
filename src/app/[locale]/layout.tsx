@@ -3,7 +3,8 @@ import localFont from "next/font/local";
 import { notFound } from "next/navigation";
 import "../globals.css";
 import { LOCALES, getDictionary, isLocale, type Locale } from "@/i18n";
-import { SITE_NAME, SITE_URL, publicPageMetadata } from "@/i18n/seo";
+import { KEYWORDS, SITE_NAME, SITE_URL, publicPageMetadata } from "@/i18n/seo";
+import { COMPANY } from "@/server/config";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { getSessionUser } from "@/server/auth/session";
@@ -63,15 +64,37 @@ export async function generateMetadata({
   const typedLocale = isLocale(locale) ? locale : "de";
 
   return {
-    metadataBase: new URL(SITE_URL),
-    applicationName: SITE_NAME,
-    title: { default: dictionary.meta.title, template: `%s — ${SITE_NAME}` },
-    description: dictionary.meta.description,
+    // Spread first: its plain `title` would otherwise replace the template.
     ...publicPageMetadata({
       locale: typedLocale,
       title: dictionary.meta.title,
       description: dictionary.meta.description,
     }),
+    metadataBase: new URL(SITE_URL),
+    applicationName: SITE_NAME,
+    title: { default: dictionary.meta.title, template: `%s — ${SITE_NAME}` },
+    description: dictionary.meta.description,
+    keywords: KEYWORDS,
+    category: "finance",
+    authors: [{ name: SITE_NAME, url: SITE_URL }],
+    creator: SITE_NAME,
+    publisher: SITE_NAME,
+    // Figures such as "14473" or a rate must not turn into tap-to-call links.
+    formatDetection: { telephone: false, address: false, email: false },
+    // Set in the deployment once the property is claimed in Search Console
+    // and Bing Webmaster Tools; absent, no tag is emitted.
+    verification: {
+      google: process.env.GOOGLE_SITE_VERIFICATION,
+      other: process.env.BING_SITE_VERIFICATION
+        ? { "msvalidate.01": process.env.BING_SITE_VERIFICATION }
+        : undefined,
+    },
+    other: {
+      "geo.region": `${COMPANY.country}-BB`,
+      "geo.placename": COMPANY.city,
+      "geo.position": `${COMPANY.geo.latitude};${COMPANY.geo.longitude}`,
+      ICBM: `${COMPANY.geo.latitude}, ${COMPANY.geo.longitude}`,
+    },
   };
 }
 

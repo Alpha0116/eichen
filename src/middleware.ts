@@ -35,10 +35,11 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Static assets, the framework's own routes and the two files crawlers ask
-  // for by name keep their paths: a robots.txt that answers with a redirect to
-  // a localised copy is a robots.txt no crawler reads.
+  // Static assets, the framework's own routes, the two files crawlers ask
+  // for by name and the web manifest keep their paths: a robots.txt that
+  // answers with a redirect to a localised copy is a robots.txt no crawler
+  // reads.
   matcher: [
-    "/((?!_next|api|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|svg|ico|webp|woff2?)$).*)",
+    "/((?!_next|api|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|.*\\.(?:png|jpg|jpeg|svg|ico|webp|woff2?)$).*)",
   ],
 };

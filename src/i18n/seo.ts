@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { COMPANY, CONTACT, PRODUCT } from "@/server/config";
 import { DEFAULT_LOCALE, getDictionary, INTL_LOCALES, LOCALES, type Locale } from "./index";
 
 /**
@@ -52,6 +53,27 @@ function alternates(path: string): { languages?: Record<string, string> } {
  * the page is and what it offers, in the words somebody would search for,
  * without stacking keywords the sentence does not need.
  */
+/**
+ * The searches the home page answers. Search engines give the tag little
+ * weight today; it stays because some still read it and it costs nothing.
+ * Every term is something the product actually is.
+ */
+export const KEYWORDS = [
+  "Kredit",
+  "Onlinekredit",
+  "Ratenkredit",
+  "Privatkredit",
+  "Kredit online beantragen",
+  "günstiger Kredit",
+  "Kredit 3 Prozent",
+  "fester Sollzins",
+  "Autokredit",
+  "Umschuldung",
+  "Kredit Potsdam",
+  "Kredit Brandenburg",
+  "Kreditrechner",
+];
+
 export const PAGE_SEO = {
   legal: {
     de: {
@@ -83,10 +105,21 @@ export function publicPageMetadata({ locale, path = "", title, description }: Pa
       url: urlFor(locale, path),
       title,
       description,
-      images: [{ url: "/eichen-logo.png", width: 1200, height: 630, alt: SITE_NAME }],
+      // The image itself is the file-based opengraph-image beside the
+      // locale layout, drawn at the 1200×630 a preview card expects.
     },
     twitter: { card: "summary_large_image", title, description },
-    robots: { index: true, follow: true },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    },
   };
 }
 
@@ -105,30 +138,57 @@ export const privateMetadata: Metadata = {
   alternates: { canonical: null },
 };
 
+const ORGANIZATION_ID = `${SITE_URL}/#organization`;
+
+const postalAddress = {
+  "@type": "PostalAddress",
+  streetAddress: COMPANY.street,
+  postalCode: COMPANY.postalCode,
+  addressLocality: COMPANY.city,
+  addressRegion: COMPANY.region,
+  addressCountry: COMPANY.country,
+};
+
 /**
  * Structured data for the home page.
  *
- * Only facts that are on the page or in configuration: a name, a language, a
- * contact address and what the product is. No ratings, no invented postal
- * address — a knowledge panel built on figures nobody can check is worse than
- * none at all.
+ * Only facts that are on the page or in configuration: the name, the postal
+ * address printed in the imprint, a contact address, the rate and the amount
+ * range, and the questions the FAQ answers. No ratings — review markup for
+ * reviews a business publishes about itself is ignored by search engines at
+ * best and penalised at worst.
  */
-export function homeJsonLd(locale: Locale, contactEmail: string) {
+export function homeJsonLd(locale: Locale) {
   const dictionary = getDictionary(locale);
+  const faq = dictionary.landing.faq.items;
+
   return {
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "Organization",
-        "@id": `${SITE_URL}/#organization`,
+        "@type": ["Organization", "FinancialService"],
+        "@id": ORGANIZATION_ID,
         name: SITE_NAME,
         url: SITE_URL,
         logo: `${SITE_URL}/eichen-logo.png`,
+        image: `${SITE_URL}/hero-city.webp`,
+        description: dictionary.meta.description,
+        email: CONTACT.email,
+        address: postalAddress,
+        geo: {
+          "@type": "GeoCoordinates",
+          latitude: COMPANY.geo.latitude,
+          longitude: COMPANY.geo.longitude,
+        },
+        areaServed: { "@type": "Country", name: COMPANY.countryName },
+        currenciesAccepted: PRODUCT.currency,
         contactPoint: {
           "@type": "ContactPoint",
           contactType: "customer support",
-          email: contactEmail,
+          email: CONTACT.email,
+          telephone: `+${CONTACT.whatsappNumber}`,
           availableLanguage: ["de"],
+          areaServed: COMPANY.country,
         },
       },
       {
@@ -136,16 +196,72 @@ export function homeJsonLd(locale: Locale, contactEmail: string) {
         "@id": `${SITE_URL}/#website`,
         url: SITE_URL,
         name: SITE_NAME,
+        description: dictionary.meta.description,
         inLanguage: locale,
-        publisher: { "@id": `${SITE_URL}/#organization` },
+        publisher: { "@id": ORGANIZATION_ID },
       },
       {
-        "@type": "FinancialProduct",
+        "@type": "LoanOrCredit",
         name: dictionary.meta.title,
         description: dictionary.meta.description,
-        provider: { "@id": `${SITE_URL}/#organization` },
-        areaServed: "DE",
         url: urlFor(locale),
+        provider: { "@id": ORGANIZATION_ID },
+        areaServed: COMPANY.country,
+        currency: PRODUCT.currency,
+        loanType: "Ratenkredit",
+        amount: {
+          "@type": "MonetaryAmount",
+          currency: PRODUCT.currency,
+          minValue: PRODUCT.minAmount / 100,
+          maxValue: PRODUCT.maxAmount / 100,
+        },
+        loanTerm: {
+          "@type": "QuantitativeValue",
+          minValue: PRODUCT.minTermMonths,
+          maxValue: PRODUCT.maxTermMonths,
+          unitCode: "MON",
+        },
+        interestRate: PRODUCT.referenceRate * 100,
+      },
+      {
+        "@type": "FAQPage",
+        "@id": `${urlFor(locale)}#faq`,
+        inLanguage: locale,
+        mainEntity: Object.values(faq).map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
+        })),
+      },
+    ],
+  };
+}
+
+/** Structured data for the imprint: where it sits, and whose it is. */
+export function legalJsonLd(locale: Locale) {
+  const dictionary = getDictionary(locale);
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": urlFor(locale, "legal"),
+        url: urlFor(locale, "legal"),
+        name: PAGE_SEO.legal.de.title,
+        inLanguage: locale,
+        about: { "@id": ORGANIZATION_ID },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: SITE_NAME, item: urlFor(locale) },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: dictionary.legal.imprint,
+            item: urlFor(locale, "legal"),
+          },
+        ],
       },
     ],
   };

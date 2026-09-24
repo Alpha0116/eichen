@@ -75,6 +75,23 @@ export const CONTACT = {
   opsEmail: process.env.EICHEN_OPS_EMAIL ?? process.env.EICHEN_CONTACT_EMAIL ?? "kontakt@eichen-kredit.com",
 } as const;
 
+/**
+ * The company's postal address, as printed in the imprint and the footer and
+ * given to search engines in the structured data. One place, so the three
+ * cannot disagree.
+ */
+export const COMPANY = {
+  name: "Eichen",
+  street: "Telegrafenberg",
+  postalCode: "14473",
+  city: "Potsdam",
+  region: "Brandenburg",
+  country: "DE",
+  countryName: "Deutschland",
+  /** Telegrafenberg, Potsdam. For the map pin a search engine draws. */
+  geo: { latitude: 52.3806, longitude: 13.064 },
+} as const;
+
 export function whatsappLink(message?: string): string {
   const query = message ? `?text=${encodeURIComponent(message)}` : "";
   return `https://wa.me/${CONTACT.whatsappNumber}${query}`;

@@ -1,10 +1,11 @@
-import { Alert, Card } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { ContactButtons } from "@/components/ContactButtons";
 import { PageHeader } from "@/components/PageHeader";
 import { Reveal } from "@/components/Reveal";
 import { Section } from "@/components/Section";
 import { getDictionary, isLocale } from "@/i18n";
-import { PAGE_SEO, publicPageMetadata } from "@/i18n/seo";
+import { PAGE_SEO, legalJsonLd, publicPageMetadata } from "@/i18n/seo";
+import { COMPANY, CONTACT } from "@/server/config";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -19,6 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 export default async function LegalPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const dictionary = getDictionary(locale);
+  const typedLocale = isLocale(locale) ? locale : "de";
 
   const sections = [
     {
@@ -40,14 +42,39 @@ export default async function LegalPage({ params }: { params: Promise<{ locale: 
 
   return (
     <div>
+      <script
+        type="application/ld+json"
+        // Built from configuration and the dictionaries only.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(legalJsonLd(typedLocale)) }}
+      />
       <PageHeader title={dictionary.legal.imprint} eyebrow={dictionary.common.brand} />
 
       <Section tone="surface" className="py-12 sm:py-16">
         <div className="mx-auto max-w-3xl space-y-6">
           <Reveal>
-            <Alert tone="warning" title={dictionary.legal.disclaimerTitle}>
-              {dictionary.legal.disclaimer}
-            </Alert>
+            <Card as="section" className="space-y-3 p-6">
+              <h2 id="imprint" className="scroll-mt-24 font-display text-lg font-semibold">
+                {dictionary.legal.imprint}
+              </h2>
+              <p className="text-sm text-[var(--muted)]">{dictionary.legal.imprintIntro}</p>
+              <address className="grid gap-4 text-sm not-italic leading-relaxed sm:grid-cols-2">
+                <div>
+                  <span className="block font-semibold">{dictionary.legal.addressLabel}</span>
+                  <span className="block">{COMPANY.name}</span>
+                  <span className="block">{COMPANY.street}</span>
+                  <span className="block">
+                    {COMPANY.postalCode} {COMPANY.city}
+                  </span>
+                  <span className="block">{COMPANY.countryName}</span>
+                </div>
+                <div>
+                  <span className="block font-semibold">{dictionary.legal.contactLabel}</span>
+                  <a href={`mailto:${CONTACT.email}`} className="block hover:underline">
+                    {CONTACT.email}
+                  </a>
+                </div>
+              </address>
+            </Card>
           </Reveal>
 
           {sections.map((section, index) => (

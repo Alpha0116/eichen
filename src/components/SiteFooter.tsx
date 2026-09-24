@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Dictionary, Locale } from "@/i18n";
 import { ContactButtons } from "./ContactButtons";
-import { mailtoLink } from "@/server/config";
+import { COMPANY, mailtoLink } from "@/server/config";
 
 export function SiteFooter({ locale, dictionary }: { locale: Locale; dictionary: Dictionary }) {
   const t = dictionary.footer;
@@ -17,6 +17,9 @@ export function SiteFooter({ locale, dictionary }: { locale: Locale; dictionary:
               <span className="text-base font-semibold tracking-tight">{dictionary.common.brand}</span>
             </Link>
             <p className="max-w-xs text-sm leading-relaxed text-[var(--muted)]">{t.tagline}</p>
+            <address className="text-sm not-italic leading-relaxed text-[var(--muted)]">
+              {COMPANY.name}, {COMPANY.street}, {COMPANY.postalCode} {COMPANY.city}
+            </address>
             {/* Reaching a person is a footer-level affordance, not something
                 buried on the complaints page. */}
             <ContactButtons dictionary={dictionary} size="sm" />

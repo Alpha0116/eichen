@@ -10,9 +10,9 @@
  */
 export const de = {
   meta: {
-    title: "Eichen — Onlinekredit mit transparenten Konditionen",
+    title: "Eichen — Onlinekredit zu 3 % festem Sollzins",
     description:
-      "Rate und effektiven Jahreszins in einer Minute berechnen, unverbindlich Konditionen anfragen und Angebote mehrerer Banken vergleichen. Die Konditionsanfrage ist SCHUFA-neutral.",
+      "Ratenkredit online von 1.000 € bis 80.000 € zu 3 % gebundenem Sollzins p. a. — für alle gleich, ohne Aufschläge. Rate sofort berechnen, Antwort meist binnen 24 Stunden. Eichen, Potsdam.",
   },
 
   common: {
@@ -1250,9 +1250,9 @@ Unterschrift     {signatureHash}`,
     cookies: "Cookies",
     complaints: "Beschwerden",
     esis: "Europäische Standardinformationen",
-    disclaimerTitle: "Rechtlicher Hinweis",
-    disclaimer:
-      "Eichen ist ein Demonstrationsprojekt. Konditionen, Entscheidungen und Kundenstimmen sind erfunden, es kommt kein Kreditvertrag zustande, es fließt kein Geld und es findet keine echte Auskunftei-, Konto- oder Identitätsprüfung statt.",
+    imprintIntro: "Angaben gemäß § 5 DDG",
+    addressLabel: "Anschrift",
+    contactLabel: "Kontakt",
     dataRights:
       "Sie haben das Recht auf Auskunft, Berichtigung, Löschung und Einschränkung der Verarbeitung sowie auf Widerspruch und Datenübertragbarkeit.",
     supervisory: "Zuständige Aufsichtsbehörde: Bundesanstalt für Finanzdienstleistungsaufsicht (BaFin).",
